@@ -49,6 +49,6 @@ if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`[wewrite] server listening on http://localhost:${PORT}`);
 });
