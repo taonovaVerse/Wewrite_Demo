@@ -1,0 +1,18 @@
+{
+  "providers": {
+    "anthropic": {
+      "apiKey": "sk-ant-...",
+      "model": "claude-sonnet-4-6"
+    },
+    "deepseek": {
+      "apiKey": "sk-...",
+      "model": "deepseek-chat",
+      "baseURL": "https://api.deepseek.com"
+    }
+  },
+  "routing": {
+    "autocomplete": "deepseek",
+    "detail": "anthropic",
+    "continue": "anthropic"
+  }
+}

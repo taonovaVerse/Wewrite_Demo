@@ -1,0 +1,22 @@
+{
+  "name": "wewrite",
+  "private": true,
+  "version": "0.1.0",
+  "description": "AI 写作补全系统：人做船长，AI 做局部最优",
+  "workspaces": [
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client && npm run build -w server",
+    "start": "npm run start -w server",
+    "tauri": "tauri",
+    "package:server": "node scripts/package-server.mjs",
+    "build:desktop": "npm run build && node scripts/package-server.mjs && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "concurrently": "^9.1.0"
+  }
+}

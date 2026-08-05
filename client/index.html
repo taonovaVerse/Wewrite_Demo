@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Wewrite — AI 写作补全</title>
+  </head>
+  <body>
+    <div id="app">
+      <nav id="activitybar" aria-label="活动栏">
+        <button class="activity-item active" data-view="explorer" title="资源管理器 (Ctrl+Shift+E)">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h4l1.5 2H14v8H2z"/></svg>
+        </button>
+        <button class="activity-item" data-view="characters" title="人物卡">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="2.6"/><path d="M2.5 14c.6-3 2.6-4.5 5.5-4.5s4.9 1.5 5.5 4.5z"/></svg>
+        </button>
+        <button class="activity-item" data-view="world" title="世界观">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.8 1.8 10.2 0 12M8 2C6.2 3.8 6.2 12.2 8 14"/></svg>
+        </button>
+        <button class="activity-item" data-view="foreshadow" title="伏笔">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 8C3 4.8 5.4 3.2 8 3.2s5 1.6 6.5 4.8C13 11.2 10.6 12.8 8 12.8S3 11.2 1.5 8z"/><circle cx="8" cy="8" r="2.1"/></svg>
+        </button>
+        <button class="activity-item" data-view="style" title="文风">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2l3 3L5.5 13.5 2 14l.5-3.5z"/></svg>
+        </button>
+        <button class="activity-item" data-view="blueprint" title="章节细纲">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2.5" width="12" height="11" rx="1"/><path d="M2 6h12M6.5 6v7.5"/></svg>
+        </button>
+        <button class="activity-item" data-view="bank" title="素材库">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.2c0-1.4 2.7-2.4 6-2.4s6 1 6 2.4S11.3 7.6 8 7.6 2 6.6 2 5.2z"/><path d="M2 5.2v6c0 1.4 2.7 2.4 6 2.4s6-1 6-2.4v-6"/><path d="M2 8.2c0 1.4 2.7 2.4 6 2.4s6-1 6-2.4"/></svg>
+        </button>
+      </nav>
+
+      <aside id="sidebar">
+        <header id="sidebar-header"></header>
+        <div id="sidebar-body"></div>
+      </aside>
+
+      <main id="editor-area">
+        <div id="tabs" aria-label="编辑器标签页"></div>
+        <div id="editor-wrap">
+          <div id="editor-empty" class="hidden">打开一个章节，或在资源管理器里新建章节开始写作</div>
+        </div>
+      </main>
+    </div>
+
+    <footer id="statusbar" aria-label="状态栏"></footer>
+
+    <div id="palette-overlay" class="overlay hidden">
+      <div class="overlay-box">
+        <span id="palette-label" class="overlay-label"></span>
+        <input id="palette-input" class="overlay-input" placeholder="输入命令…" spellcheck="false" />
+        <div id="palette-list" class="overlay-list"></div>
+      </div>
+    </div>
+
+    <div id="quick-input-overlay" class="overlay hidden">
+      <div class="overlay-box">
+        <span id="quick-input-label" class="overlay-label"></span>
+        <input id="quick-input-field" class="overlay-input" spellcheck="false" />
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

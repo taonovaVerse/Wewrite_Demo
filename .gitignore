@@ -1,0 +1,15 @@
+node_modules/
+dist/
+server/data/
+server/config.json
+*.log
+.env
+.DS_Store
+
+# Tauri build artifacts (assembled by scripts/package-server.mjs)
+src-tauri/binaries/
+src-tauri/resources/
+.cache/
+
+# Local Claude Code settings (machine-specific)
+.claude/settings.local.json
