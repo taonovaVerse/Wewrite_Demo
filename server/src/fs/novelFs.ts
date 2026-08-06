@@ -32,6 +32,11 @@ function markDirty(): void {
   idIndexDirty = true;
 }
 
+/** 版本回滚后强制清空章节索引（下次读取重新扫盘） */
+export function invalidateChapterIndex(): void {
+  markDirty();
+}
+
 /** 世界文档发号：与章节/小说共用全局计数器（全库递增、跨类型不重复）；同 kind 去重由调用方兜底 */
 export function nextDocId(novelId: number): number {
   return nextId();

@@ -304,6 +304,7 @@ function registerCommands(): void {
     ['style', '文风'],
     ['blueprint', '章节细纲'],
     ['bank', '素材库'],
+    ['history', '历史记录'],
   ];
   for (const [vid, label] of viewCmds) {
     registerCommand({

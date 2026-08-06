@@ -140,6 +140,27 @@ export interface DetailBankInput {
   tags: string;
 }
 
+/** 历史版本（git commit） */
+export interface VersionInfo {
+  hash: string;
+  date: string;
+  message: string;
+}
+
+/** 统一 diff 的一行（type 决定着色） */
+export interface DiffLine {
+  type: 'add' | 'del' | 'ctx' | 'hunk' | 'meta';
+  text: string;
+}
+
+/** 一个变更文件的统一 diff */
+export interface DiffFile {
+  path: string;
+  added: number;
+  removed: number;
+  lines: DiffLine[];
+}
+
 import { apiUrl } from './apiBase';
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -188,6 +209,17 @@ export const api = {
     }),
   moveChapter: (data: { novelId: number; chapterId: number; folder: string; beforeId?: number }) =>
     request<Chapter>('/api/chapters/move', { method: 'POST', body: JSON.stringify(data) }),
+
+  versions: (id: number) =>
+    request<{ enabled: boolean; versions: VersionInfo[] }>(`/api/novels/${id}/versions`),
+  versionDiff: (id: number, hash: string) =>
+    request<DiffFile[]>(`/api/novels/${id}/versions/${hash}`),
+  restoreVersion: (id: number, hash: string) =>
+    request<{ restored: boolean }>(`/api/novels/${id}/versions/${hash}/restore`, {
+      method: 'POST',
+    }),
+  snapshot: (id: number) =>
+    request<{ committed: boolean }>(`/api/novels/${id}/versions`, { method: 'POST' }),
   saveChapter: (id: number, patch: ChapterPatch) =>
     request<Chapter>(`/api/chapters/${id}`, {
       method: 'PUT',

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { createFolder, deleteFolder, moveChapter, renameFolder } from '../fs/novelFs.js';
 import { novelById } from '../fs/registry.js';
+import { snapshotNow } from '../fs/versioning.js';
 
 export const treeRouter = Router();
 
@@ -18,6 +19,7 @@ treeRouter.post('/novels/:id/folders', (req, res) => {
   }
   const parent = String(req.body?.parent ?? '').trim();
   const folder = createFolder(novelId, name, parent);
+  void snapshotNow(novelId);
   res.status(201).json({ folder });
 });
 
@@ -32,6 +34,7 @@ treeRouter.post('/novels/:id/folders/rename', (req, res) => {
   }
   try {
     const renamed = renameFolder(novelId, folder, name);
+    void snapshotNow(novelId);
     res.json({ folder: renamed });
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : '重命名失败' });
@@ -48,6 +51,7 @@ treeRouter.delete('/novels/:id/folders', async (req, res) => {
   }
   try {
     await deleteFolder(novelId, folder);
+    void snapshotNow(novelId);
     res.status(204).end();
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : '删除失败' });
@@ -72,6 +76,7 @@ treeRouter.post('/chapters/move', (req, res) => {
   }
   try {
     const chapter = moveChapter(novelId, chapterId, folder, beforeId);
+    void snapshotNow(novelId);
     res.json(chapter);
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : '移动失败' });

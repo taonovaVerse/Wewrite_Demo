@@ -5,7 +5,8 @@ export type ViewId =
   | 'foreshadow'
   | 'style'
   | 'blueprint'
-  | 'bank';
+  | 'bank'
+  | 'history';
 
 export interface SidebarView {
   id: ViewId;

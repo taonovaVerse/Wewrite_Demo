@@ -5,6 +5,7 @@ import { foreshadowView } from './views/foreshadow';
 import { styleView } from './views/style';
 import { blueprintView } from './views/blueprint';
 import { bankView } from './views/bank';
+import { historyView } from './views/history';
 import type { ViewId, SidebarView } from './views/types';
 import { el } from './ui';
 
@@ -16,6 +17,7 @@ const views: Record<ViewId, SidebarView> = {
   style: styleView,
   blueprint: blueprintView,
   bank: bankView,
+  history: historyView,
 };
 
 const VIEW_TITLES: Record<ViewId, string> = {
@@ -26,6 +28,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   style: '文风',
   blueprint: '章节细纲',
   bank: '素材库',
+  history: '历史',
 };
 
 let active: ViewId = 'explorer';

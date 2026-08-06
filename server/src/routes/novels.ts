@@ -11,6 +11,7 @@ import {
   touchNovel,
   type NovelMeta,
 } from '../fs/registry.js';
+import { snapshotNow } from '../fs/versioning.js';
 
 export const novelsRouter = Router();
 
@@ -72,7 +73,9 @@ novelsRouter.put('/:id', (req, res) => {
     return;
   }
   try {
-    res.json(shape(renameNovel(Number(req.params.id), title)));
+    const novel = renameNovel(Number(req.params.id), title);
+    void snapshotNow(novel.id);
+    res.json(shape(novel));
   } catch (e) {
     res.status(400).json({ error: e instanceof Error ? e.message : '重命名失败' });
   }
@@ -98,5 +101,6 @@ novelsRouter.post('/:id/chapters', (req, res) => {
   const folder = String(req.body?.folder ?? '').trim();
   const chapter = createChapterFile(novelId, title, folder);
   touchNovel(novelId);
+  void snapshotNow(novelId);
   res.status(201).json(chapter);
 });

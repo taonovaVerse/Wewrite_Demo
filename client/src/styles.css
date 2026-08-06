@@ -656,6 +656,51 @@ body {
   flex-shrink: 0;
 }
 
+/* 历史视图：选中版本高亮 + 统一 diff 着色 */
+.history-selected {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.diff-body {
+  margin-top: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.diff-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.diff-add {
+  color: #98c379;
+}
+
+.diff-del {
+  color: #e06c75;
+}
+
+.diff-ctx {
+  color: var(--fg-dim);
+}
+
+.diff-hunk {
+  color: #569cd6;
+}
+
+.diff-meta {
+  color: var(--muted);
+  font-style: italic;
+}
+
 .view-form {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { listKindDocs, getDoc, createDoc, writeDoc, deleteDoc } from '../fs/docFs.js';
+import { scheduleSnapshot, snapshotNow } from '../fs/versioning.js';
 import type { DocKind } from '../types.js';
 
 // 编辑器专用文档路由：把世界文档（人物卡/世界观/伏笔/文风/素材库）作为可编辑文件打开。
@@ -55,6 +56,7 @@ docsRouter.post('/', (req, res) => {
     return;
   }
   const doc = createDoc(novelId, kind, title);
+  void snapshotNow(novelId);
   res.status(201).json(doc);
 });
 
@@ -80,6 +82,7 @@ docsRouter.put('/:kind/:id', (req, res) => {
     // 人物卡/世界观改名时同步重命名文件
     title: req.body?.title !== undefined ? String(req.body.title) : undefined,
   });
+  scheduleSnapshot(novelId);
   res.json(updated);
 });
 
@@ -93,5 +96,6 @@ docsRouter.delete('/:kind/:id', async (req, res) => {
     return;
   }
   await deleteDoc(novelId, kind, id);
+  void snapshotNow(novelId);
   res.status(204).end();
 });

@@ -6,6 +6,7 @@ import {
   renameFileToTitle,
 } from '../fs/novelFs.js';
 import { touchNovel } from '../fs/registry.js';
+import { scheduleSnapshot, snapshotNow } from '../fs/versioning.js';
 import { parseSceneCharacterIds, type ChapterRow } from '../types.js';
 
 export const chaptersRouter = Router();
@@ -68,6 +69,7 @@ chaptersRouter.put('/:id', (req, res) => {
   if (title !== existing.title) renameFileToTitle(merged);
   writeChapter(merged);
   touchNovel(existing.novel_id);
+  scheduleSnapshot(existing.novel_id);
   res.json(getChapterById(id) ?? merged);
 });
 
@@ -85,5 +87,6 @@ chaptersRouter.delete('/:id', async (req, res) => {
     return;
   }
   touchNovel(chapter.novel_id);
+  void snapshotNow(chapter.novel_id);
   res.status(204).end();
 });

@@ -279,6 +279,7 @@ export async function deleteNovel(id: number): Promise<void> {
 /** 幂等哨兵：.registry.json 存在即视为已迁移（哪怕损坏也不重迁） */
 export function migrateNovelRegistry(): void {
   if (fs.existsSync(REGISTRY_FILE)) return;
+  fs.mkdirSync(NOVELS_ROOT, { recursive: true }); // 空库首启时 novels 目录还不存在，写哨兵前先建
   const rows = db.prepare('SELECT id, title, folder, created_at, updated_at FROM novels').all() as {
     id: number;
     title: string;
