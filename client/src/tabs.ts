@@ -1,17 +1,25 @@
 import { EditorState } from '@codemirror/state';
 import type { EditorHandle } from './editor';
-import type { Chapter } from './api';
+import type { Chapter, DocKind, DocRow } from './api';
 
 export interface TabData {
-  chapterId: number;
+  /** 全局唯一键：章节 `c:<id>`、文档 `d:<kind>:<id>` */
+  key: string;
+  kind: 'chapter' | 'doc';
   title: string;
   orderIdx: number;
   dirty: boolean;
   savedState: EditorState;
+  /** kind==='chapter' 时的章节 id */
+  chapterId?: number;
+  /** kind==='doc' 时的文档 kind / id */
+  docKind?: DocKind;
+  docId?: number;
 }
 
 export interface TabManagerOptions {
   saveChapter: (chapterId: number, content: string) => Promise<void>;
+  saveDoc: (kind: DocKind, docId: number, content: string) => Promise<void>;
   requestSuggestion: (
     req: { textBefore: string; textAfter: string; signal: AbortSignal },
     chapterId: number,
@@ -20,11 +28,20 @@ export interface TabManagerOptions {
   onActiveChange: () => void;
 }
 
+function chapterKey(id: number): string {
+  return `c:${id}`;
+}
+
+function docKey(kind: DocKind, id: number): string {
+  return `d:${kind}:${id}`;
+}
+
 export class TabManager {
-  activeId: number | null = null;
+  /** 当前活跃 tab 的 key；无 tab 时为 null */
+  activeKey: string | null = null;
   isSwitching = false;
 
-  private tabs = new Map<number, TabData>();
+  private tabs = new Map<string, TabData>();
   private saveTimer: number | undefined;
 
   constructor(
@@ -36,12 +53,21 @@ export class TabManager {
     return this.tabs.size;
   }
 
-  has(id: number): boolean {
-    return this.tabs.has(id);
+  /** 当前活跃章节 id（活跃 tab 是文档时返回 null） */
+  get activeId(): number | null {
+    return this.active?.kind === 'chapter' ? (this.active.chapterId ?? null) : null;
+  }
+
+  get activeChapterId(): number | null {
+    return this.activeId;
+  }
+
+  hasChapter(id: number): boolean {
+    return this.tabs.has(chapterKey(id));
   }
 
   get active(): TabData | null {
-    return this.activeId == null ? null : (this.tabs.get(this.activeId) ?? null);
+    return this.activeKey == null ? null : (this.tabs.get(this.activeKey) ?? null);
   }
 
   all(): TabData[] {
@@ -49,80 +75,110 @@ export class TabManager {
   }
 
   openChapter(chapter: Chapter): void {
-    if (this.tabs.has(chapter.id)) {
-      this.switchTo(chapter.id);
+    const key = chapterKey(chapter.id);
+    if (this.tabs.has(key)) {
+      this.switchTo(key);
       return;
     }
-    const state = this.handle.createState(chapter.content);
-    this.tabs.set(chapter.id, {
-      chapterId: chapter.id,
+    const state = this.handle.createState(chapter.content, false, 'chapter');
+    this.tabs.set(key, {
+      key,
+      kind: 'chapter',
       title: chapter.title,
       orderIdx: chapter.order_idx,
       dirty: false,
       savedState: state,
+      chapterId: chapter.id,
     });
-    this.switchTo(chapter.id);
+    this.switchTo(key);
   }
 
-  switchTo(id: number): void {
-    const next = this.tabs.get(id);
-    if (!next || id === this.activeId) return;
+  openDoc(doc: DocRow): void {
+    const key = docKey(doc.kind, doc.id);
+    if (this.tabs.has(key)) {
+      this.switchTo(key);
+      return;
+    }
+    const state = this.handle.createState(doc.body, false, 'doc');
+    this.tabs.set(key, {
+      key,
+      kind: 'doc',
+      title: doc.title,
+      orderIdx: 0,
+      dirty: false,
+      savedState: state,
+      docKind: doc.kind,
+      docId: doc.id,
+    });
+    this.switchTo(key);
+  }
+
+  switchTo(key: string): void {
+    const next = this.tabs.get(key);
+    if (!next || key === this.activeKey) return;
     this.handle.cancelSuggestion();
     void this.flushActive();
     this.applyState(next.savedState);
-    this.activeId = id;
+    this.activeKey = key;
     this.opts.onActiveChange();
     this.opts.onTabsChange();
   }
 
-  async close(id: number): Promise<void> {
-    const tab = this.tabs.get(id);
+  /** 关闭 tab；关闭的是活跃 tab 时切到剩余第一个 */
+  async close(key: string): Promise<void> {
+    const tab = this.tabs.get(key);
     if (!tab) return;
-    if (id === this.activeId) {
+    if (key === this.activeKey) {
       this.handle.cancelSuggestion();
       await this.flushActive();
-      if (!this.tabs.has(id)) return;
-      this.tabs.delete(id);
-      if (this.activeId === id) {
-        this.activeId = null;
-        const remaining = [...this.tabs.values()];
-        if (remaining.length > 0) {
-          const next = remaining[0];
-          this.applyState(next.savedState);
-          this.activeId = next.chapterId;
-        } else {
-          this.applyState(this.handle.createState('', true));
-        }
+      if (!this.tabs.has(key)) return;
+      this.tabs.delete(key);
+      this.activeKey = null;
+      const remaining = [...this.tabs.values()];
+      if (remaining.length > 0) {
+        const next = remaining[0];
+        this.applyState(next.savedState);
+        this.activeKey = next.key;
+      } else {
+        this.applyState(this.handle.createState('', true, 'doc'));
       }
       this.opts.onActiveChange();
       this.opts.onTabsChange();
     } else {
-      this.tabs.delete(id);
+      this.tabs.delete(key);
       this.opts.onTabsChange();
     }
   }
 
+  closeChapter(id: number): Promise<void> {
+    return this.close(chapterKey(id));
+  }
+
+  closeDoc(kind: DocKind, id: number): Promise<void> {
+    return this.close(docKey(kind, id));
+  }
+
   async closeAll(): Promise<void> {
-    if (this.activeId != null) {
+    if (this.activeKey != null) {
       this.handle.cancelSuggestion();
       await this.flushActive();
     }
     this.tabs.clear();
-    this.activeId = null;
-    this.applyState(this.handle.createState('', true));
+    this.activeKey = null;
+    this.applyState(this.handle.createState('', true, 'doc'));
     this.opts.onActiveChange();
     this.opts.onTabsChange();
   }
 
   rename(id: number, title: string): void {
-    const tab = this.tabs.get(id);
+    const tab = this.tabs.get(chapterKey(id));
     if (!tab) return;
     tab.title = title;
     this.opts.onTabsChange();
   }
 
   updateFromChapter(ch: Chapter): void {
-    const tab = this.tabs.get(ch.id);
+    const tab = this.tabs.get(chapterKey(ch.id));
     if (!tab) return;
     tab.title = ch.title;
     tab.orderIdx = ch.order_idx;
@@ -149,7 +205,11 @@ export class TabManager {
     const state = this.handle.view.state;
     tab.dirty = false;
     try {
-      await this.opts.saveChapter(tab.chapterId, doc);
+      if (tab.kind === 'doc') {
+        await this.opts.saveDoc(tab.docKind!, tab.docId!, doc);
+      } else {
+        await this.opts.saveChapter(tab.chapterId!, doc);
+      }
       tab.savedState = state;
       this.opts.onTabsChange();
       this.opts.onActiveChange();
@@ -162,9 +222,9 @@ export class TabManager {
   async requestSuggestionForActive(
     req: { textBefore: string; textAfter: string; signal: AbortSignal },
   ): Promise<string> {
-    const id = this.activeId;
-    if (id == null) return '';
-    return this.opts.requestSuggestion(req, id);
+    const tab = this.active;
+    if (!tab || tab.kind !== 'chapter') return '';
+    return this.opts.requestSuggestion(req, tab.chapterId!);
   }
 
   private applyState(state: EditorState): void {

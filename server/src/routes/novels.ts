@@ -1,47 +1,32 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import { createChapterFile, listNovelTree } from '../fs/novelFs.js';
+import { listNovelDocs } from '../fs/docFs.js';
+import {
+  listNovels,
+  novelById,
+  createInternalNovel,
+  openExternalNovel,
+  renameNovel,
+  deleteNovel,
+  touchNovel,
+  type NovelMeta,
+} from '../fs/registry.js';
 
 export const novelsRouter = Router();
 
-interface NovelRow {
-  id: number;
-  title: string;
-  created_at: string;
-  updated_at: string;
+function shape(n: NovelMeta) {
+  return {
+    id: n.id,
+    title: n.title,
+    folder: n.folder,
+    created_at: n.created_at,
+    updated_at: n.updated_at,
+    external: n.external,
+  };
 }
-
-interface ChapterRow {
-  id: number;
-  novel_id: number;
-  order_idx: number;
-  title: string;
-  content: string;
-  blueprint: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
-const listNovelsStmt = db.prepare(
-  'SELECT id, title, created_at, updated_at FROM novels ORDER BY updated_at DESC'
-);
-const getNovelStmt = db.prepare('SELECT * FROM novels WHERE id = ?');
-const insertNovelStmt = db.prepare('INSERT INTO novels (title) VALUES (?)');
-const listChaptersStmt = db.prepare(
-  'SELECT * FROM chapters WHERE novel_id = ? ORDER BY order_idx, id'
-);
-const insertChapterStmt = db.prepare(
-  'INSERT INTO chapters (novel_id, order_idx, title) VALUES (?, ?, ?)'
-);
-const maxOrderStmt = db.prepare(
-  'SELECT COALESCE(MAX(order_idx), 0) AS m FROM chapters WHERE novel_id = ?'
-);
-const touchNovelStmt = db.prepare(
-  "UPDATE novels SET updated_at = datetime('now') WHERE id = ?"
-);
 
 novelsRouter.get('/', (_req, res) => {
-  res.json(listNovelsStmt.all() as NovelRow[]);
+  res.json(listNovels().map(shape));
 });
 
 novelsRouter.post('/', (req, res) => {
@@ -50,34 +35,68 @@ novelsRouter.post('/', (req, res) => {
     res.status(400).json({ error: 'title 不能为空' });
     return;
   }
-  const result = insertNovelStmt.run(title);
-  const novel = getNovelStmt.get(result.lastInsertRowid) as NovelRow;
-  res.status(201).json(novel);
+  res.status(201).json(shape(createInternalNovel(title)));
+});
+
+// 打开外部文件夹为小说（幂等：同路径/已有 novel.json 则复用 id）
+novelsRouter.post('/open', (req, res) => {
+  const rawPath = String(req.body?.path ?? '');
+  if (!rawPath) {
+    res.status(400).json({ error: 'path 不能为空' });
+    return;
+  }
+  try {
+    const { meta, created } = openExternalNovel(rawPath);
+    res.status(created ? 201 : 200).json(shape(meta));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : '打开失败' });
+  }
 });
 
 novelsRouter.get('/:id', (req, res) => {
-  const id = Number(req.params.id);
-  const novel = getNovelStmt.get(id) as NovelRow | undefined;
+  const novel = novelById(Number(req.params.id));
   if (!novel) {
     res.status(404).json({ error: '小说不存在' });
     return;
   }
-  const chapters = listChaptersStmt.all(id) as ChapterRow[];
-  res.json({ ...novel, chapters });
+  // tree = 资源管理器文件树；chapters = 平铺+深度优先顺序（tabs/quickOpenChapter 继续按 id 用）；docs = 世界文档列表
+  const { tree, chapters } = listNovelTree(novel.id);
+  const docs = listNovelDocs(novel.id);
+  res.json({ ...shape(novel), tree, chapters, docs });
+});
+
+novelsRouter.put('/:id', (req, res) => {
+  const title = String(req.body?.title ?? '').trim();
+  if (!title) {
+    res.status(400).json({ error: 'title 不能为空' });
+    return;
+  }
+  try {
+    res.json(shape(renameNovel(Number(req.params.id), title)));
+  } catch (e) {
+    res.status(400).json({ error: e instanceof Error ? e.message : '重命名失败' });
+  }
+});
+
+novelsRouter.delete('/:id', async (req, res) => {
+  try {
+    await deleteNovel(Number(req.params.id));
+  } catch (e) {
+    res.status(500).json({ error: e instanceof Error ? e.message : '删除失败' });
+    return;
+  }
+  res.status(204).end();
 });
 
 novelsRouter.post('/:id/chapters', (req, res) => {
   const novelId = Number(req.params.id);
-  if (!getNovelStmt.get(novelId)) {
+  if (!novelById(novelId)) {
     res.status(404).json({ error: '小说不存在' });
     return;
   }
   const title = String(req.body?.title ?? '未命名章节');
-  const { m } = maxOrderStmt.get(novelId) as { m: number };
-  const result = insertChapterStmt.run(novelId, m + 1, title);
-  touchNovelStmt.run(novelId);
-  const chapter = db
-    .prepare('SELECT * FROM chapters WHERE id = ?')
-    .get(result.lastInsertRowid) as ChapterRow;
+  const folder = String(req.body?.folder ?? '').trim();
+  const chapter = createChapterFile(novelId, title, folder);
+  touchNovel(novelId);
   res.status(201).json(chapter);
 });

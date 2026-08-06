@@ -11,8 +11,9 @@ export const app = {
   abortCtrl: null as AbortController | null,
 };
 
+/** 当前活跃章节 id（活跃 tab 是文档时返回 null） */
 export function activeChapterId(): number | null {
-  return app.tabs?.activeId ?? null;
+  return app.tabs?.activeChapterId ?? null;
 }
 
 export function activeChapter(): Chapter | null {

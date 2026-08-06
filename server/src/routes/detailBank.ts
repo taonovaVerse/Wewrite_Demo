@@ -1,26 +1,32 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import {
+  listKindDocs,
+  getDoc,
+  createDoc,
+  writeDoc,
+  deleteDoc,
+  findDoc,
+  upsertBankMirror,
+  removeBankMirror,
+} from '../fs/docFs.js';
 import { searchDetailBank, extractTerms } from '../ai/detailBank.js';
+import type { DocRow } from '../types.js';
+
+// 素材库以 .docs/素材库/*.md 为唯一事实源（content=正文）；写文件后同步 detail_bank mirror 行（FTS 触发器维护检索）。
+// 搜索走原 searchDetailBank（查 mirror），返回形状与旧表一致。
 
 export const detailBankRouter = Router();
 
-const listStmt = db.prepare(
-  'SELECT * FROM detail_bank WHERE novel_id = ? ORDER BY id DESC'
-);
-const insertStmt = db.prepare(
-  `INSERT INTO detail_bank (novel_id, scene_type, sensory_channel, content, tags)
-   VALUES (?, ?, ?, ?, ?)`
-);
-const getStmt = db.prepare('SELECT * FROM detail_bank WHERE id = ?');
-const deleteStmt = db.prepare('DELETE FROM detail_bank WHERE id = ?');
-const updateStmt = db.prepare(
-  `UPDATE detail_bank
-   SET scene_type = COALESCE(?, scene_type),
-       sensory_channel = COALESCE(?, sensory_channel),
-       content = COALESCE(?, content),
-       tags = COALESCE(?, tags)
-   WHERE id = ?`
-);
+function bankShape(d: DocRow) {
+  return {
+    id: d.id,
+    novel_id: d.novel_id,
+    scene_type: String(d.fields.scene_type ?? ''),
+    sensory_channel: String(d.fields.sensory_channel ?? ''),
+    content: d.body,
+    tags: String(d.fields.tags ?? ''),
+  };
+}
 
 detailBankRouter.get('/', (req, res) => {
   const novelId = Number(req.query.novelId);
@@ -33,7 +39,8 @@ detailBankRouter.get('/', (req, res) => {
     res.json(searchDetailBank(novelId, q, 50));
     return;
   }
-  res.json(listStmt.all(novelId));
+  // 旧接口按 id DESC（最新在前）
+  res.json(listKindDocs(novelId, 'bank').reverse().map(bankShape));
 });
 
 detailBankRouter.post('/', (req, res) => {
@@ -46,35 +53,45 @@ detailBankRouter.post('/', (req, res) => {
   const sceneType = String(req.body?.sceneType ?? '').trim();
   const sensoryChannel = String(req.body?.sensoryChannel ?? '').trim();
   const tags = String(req.body?.tags ?? '').trim();
-  const result = insertStmt.run(novelId, sceneType, sensoryChannel, content, tags);
-  res.status(201).json(getStmt.get(result.lastInsertRowid));
+  const doc = createDoc(novelId, 'bank');
+  const updated = writeDoc(doc, {
+    fields: { scene_type: sceneType, sensory_channel: sensoryChannel, tags },
+    body: content,
+  });
+  upsertBankMirror(updated);
+  res.status(201).json(bankShape(updated));
 });
 
 detailBankRouter.put('/:id', (req, res) => {
   const id = Number(req.params.id);
-  const existing = getStmt.get(id);
-  if (!existing) {
+  const hit = findDoc('bank', id);
+  if (!hit) {
     res.status(404).json({ error: '素材不存在' });
     return;
   }
   const patch = req.body ?? {};
-  updateStmt.run(
-    patch.sceneType != null ? String(patch.sceneType).trim() : null,
-    patch.sensoryChannel != null ? String(patch.sensoryChannel).trim() : null,
-    patch.content != null ? String(patch.content).trim() : null,
-    patch.tags != null ? String(patch.tags).trim() : null,
-    id,
-  );
-  res.json(getStmt.get(id));
+  const existing = hit.doc;
+  const fields: Record<string, string | number | null> = {};
+  if (patch.sceneType != null) fields.scene_type = String(patch.sceneType).trim();
+  if (patch.sensoryChannel != null) fields.sensory_channel = String(patch.sensoryChannel).trim();
+  if (patch.tags != null) fields.tags = String(patch.tags).trim();
+  const updated = writeDoc(existing, {
+    fields,
+    body: patch.content != null ? String(patch.content).trim() : undefined,
+  });
+  upsertBankMirror(updated);
+  res.json(bankShape(updated));
 });
 
-detailBankRouter.delete('/:id', (req, res) => {
-  const existing = getStmt.get(Number(req.params.id));
-  if (!existing) {
+detailBankRouter.delete('/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const hit = findDoc('bank', id);
+  if (!hit) {
     res.status(404).json({ error: '素材不存在' });
     return;
   }
-  deleteStmt.run(Number(req.params.id));
+  await deleteDoc(hit.novelId, 'bank', id);
+  removeBankMirror(id);
   res.status(204).end();
 });
 

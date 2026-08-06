@@ -21,6 +21,7 @@ import {
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
+import { slsLinter } from './diagnostics';
 
 interface Suggestion {
   from: number;
@@ -40,9 +41,12 @@ export interface EditorOptions {
 
 export interface EditorHandle {
   view: EditorView;
-  /** 用与当前编辑器相同的扩展集创建新文档状态（打开/清空 tab 用）；readOnly 用于无 tab 时的空态 */
-  createState(doc: string, readOnly?: boolean): EditorState;
-  /** 取消挂起的幽灵补全并清除已显示的幽灵文本（切页/关页前调用） */
+  /**
+   * 用与当前编辑器相同的扩展集创建新文档状态（打开/清空 tab 用）；readOnly 用于无 tab 时的空态。
+   * kind='doc'（世界文档）时不挂幽灵补全/lint/幽灵键位，文档 tab 只做纯编辑。
+   */
+  createState(doc: string, readOnly?: boolean, kind?: 'chapter' | 'doc'): EditorState;
+  /** 取消挂起的幽灵补全并清除已显示的幽灵文本（切页/关页前调用；文档态无此扩展，安全调用） */
   cancelSuggestion(): void;
   destroy(): void;
 }
@@ -224,7 +228,8 @@ export function createEditor(
     },
   );
 
-  const extensions: Extension[] = [
+  // 世界文档（人物卡/世界观/伏笔/文风/素材库）作为纯编辑打开，不挂幽灵补全/lint
+  const baseExtensions: Extension[] = [
     lineNumbers(),
     drawSelection(),
     highlightActiveLine(),
@@ -232,16 +237,6 @@ export function createEditor(
     markdown(),
     syntaxHighlighting(defaultHighlightStyle),
     keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
-    ghostField,
-    showGhost,
-    pluginSpec,
-    Prec.high(
-      keymap.of([
-        { key: 'Tab', run: acceptAll, preventDefault: true },
-        { key: 'ArrowRight', run: acceptNextWord },
-        { key: 'Escape', run: dismiss },
-      ]),
-    ),
     EditorView.updateListener.of((update) => {
       if (update.docChanged && !opts.isSwitching()) opts.onChange();
     }),
@@ -270,20 +265,35 @@ export function createEditor(
       },
     }),
   ];
+  // 章节态额外扩展：幽灵补全 + SLS lint + 幽灵键位
+  const chapterExtensions: Extension[] = [
+    ghostField,
+    showGhost,
+    pluginSpec,
+    slsLinter,
+    Prec.high(
+      keymap.of([
+        { key: 'Tab', run: acceptAll, preventDefault: true },
+        { key: 'ArrowRight', run: acceptNextWord },
+        { key: 'Escape', run: dismiss },
+      ]),
+    ),
+  ];
 
-  const state = EditorState.create({
-    doc,
-    extensions: readOnly ? [...extensions, EditorState.readOnly.of(true)] : extensions,
-  });
+  const state = createState(doc, readOnly);
   const view = new EditorView({ parent, state });
+
+  function createState(d: string, readOnly = false, kind: 'chapter' | 'doc' = 'chapter'): EditorState {
+    const exts = kind === 'doc' ? baseExtensions : [...baseExtensions, ...chapterExtensions];
+    return EditorState.create({
+      doc: d,
+      extensions: readOnly ? [...exts, EditorState.readOnly.of(true)] : exts,
+    });
+  }
 
   return {
     view,
-    createState: (d, readOnly = false) =>
-      EditorState.create({
-        doc: d,
-        extensions: readOnly ? [...extensions, EditorState.readOnly.of(true)] : extensions,
-      }),
+    createState,
     cancelSuggestion: () => {
       view.plugin(pluginSpec)?.cancelPending();
       if (view.state.field(ghostField, false)) {

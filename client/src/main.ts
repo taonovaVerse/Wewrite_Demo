@@ -9,8 +9,16 @@ import { ask, isQuickInputOpen } from './quickInput';
 import { isPickOpen, openPalette, openPick, registerCommand, setupPalette } from './commands';
 import { setAiStatus, refreshEl as refreshStatusEl } from './status';
 import { triggerDetail } from './detail';
-import { reloadNovels, selectNovel, createNovel, createChapter } from './novels';
-import { el } from './ui';
+import {
+  reloadNovels,
+  selectNovel,
+  createNovel,
+  createChapter,
+  openNovelFolder,
+  renameNovel,
+  deleteNovel,
+} from './novels';
+import { el, confirmDelete } from './ui';
 import './styles.css';
 
 // ---------- 渲染：标签页 ----------
@@ -36,19 +44,19 @@ function tabNode(tab: TabData): HTMLElement {
   const node = el('div', 'tab' + (active ? ' active' : ''));
   node.title = tab.title || `第 ${tab.orderIdx} 章`;
   if (tab.dirty) node.appendChild(el('span', 'tab-dirty', ''));
-  const title = el('span', 'tab-title', tab.title || `§${tab.orderIdx}`);
+  const title = el('span', 'tab-title', tab.kind === 'doc' ? tab.title : tab.title || `§${tab.orderIdx}`);
   const close = document.createElement('button');
   close.className = 'tab-close';
   close.textContent = '×';
   close.title = '关闭';
   close.addEventListener('click', (e) => {
     e.stopPropagation();
-    void mgr.close(tab.chapterId);
+    void mgr.close(tab.key);
   });
   node.append(title, close);
-  node.addEventListener('click', () => mgr.switchTo(tab.chapterId));
+  node.addEventListener('click', () => mgr.switchTo(tab.key));
   node.addEventListener('auxclick', (e) => {
-    if (e.button === 1) void mgr.close(tab.chapterId);
+    if (e.button === 1) void mgr.close(tab.key);
   });
   return node;
 }
@@ -70,7 +78,8 @@ function renderStatusbar(): void {
   if (app.currentNovel) left.appendChild(statusItem(app.currentNovel.title));
   const active = app.tabs?.active ?? null;
   if (active) {
-    left.appendChild(statusItem(`§${active.orderIdx} ${active.title}`));
+    // 文档 tab 只显示标题（无章节序号）
+    left.appendChild(statusItem(active.kind === 'doc' ? active.title : `§${active.orderIdx} ${active.title}`));
     const save = statusItem(active.dirty ? '未保存' : '已保存');
     save.className = 'statusbar-item statusbar-save' + (active.dirty ? ' dirty' : '');
     left.appendChild(save);
@@ -208,6 +217,35 @@ async function newNovelCmd(): Promise<void> {
   await refresh();
 }
 
+async function openNovelFolderCmd(): Promise<void> {
+  const path = await ask('打开小说文件夹', '例如：D:\\我的小说');
+  if (!path?.trim()) return;
+  try {
+    await openNovelFolder(path.trim());
+  } catch (e) {
+    alert(e instanceof Error ? e.message : '打开文件夹失败');
+    return;
+  }
+  await refresh();
+}
+
+async function renameNovelCmd(): Promise<void> {
+  const current = app.currentNovel;
+  if (!current) return;
+  const title = await ask('小说标题', '', current.title);
+  if (!title || title.trim() === '' || title.trim() === current.title) return;
+  await renameNovel(current.id, title.trim());
+  await refresh();
+}
+
+async function deleteNovelCmd(): Promise<void> {
+  const current = app.currentNovel;
+  if (!current) return;
+  if (!confirmDelete(`小说「${current.title}」及其全部内容`)) return;
+  await deleteNovel(current.id);
+  await refresh();
+}
+
 async function newChapterCmd(): Promise<void> {
   if (!app.currentNovel) {
     await newNovelCmd();
@@ -220,8 +258,8 @@ async function newChapterCmd(): Promise<void> {
 }
 
 function closeActiveTab(): void {
-  const id = app.tabs?.activeId;
-  if (id != null) void app.tabs?.close(id);
+  const key = app.tabs?.activeKey;
+  if (key != null) void app.tabs?.close(key);
 }
 
 function saveActive(): void {
@@ -248,6 +286,9 @@ function quickOpenChapter(): void {
 
 function registerCommands(): void {
   registerCommand({ id: 'novel.new', label: '新建小说', category: '文件', run: () => void newNovelCmd() });
+  registerCommand({ id: 'novel.openFolder', label: '打开小说文件夹…', category: '文件', run: () => void openNovelFolderCmd() });
+  registerCommand({ id: 'novel.rename', label: '重命名小说', category: '文件', run: () => void renameNovelCmd() });
+  registerCommand({ id: 'novel.delete', label: '删除小说', category: '文件', run: () => void deleteNovelCmd() });
   registerCommand({ id: 'chapter.new', label: '新建章节', category: '文件', run: () => void newChapterCmd() });
   registerCommand({ id: 'chapter.open', label: '打开章节…', category: '文件', run: quickOpenChapter });
   registerCommand({ id: 'tab.close', label: '关闭当前标签', category: '文件', run: closeActiveTab });
@@ -300,6 +341,9 @@ window.addEventListener('keydown', (e) => {
   } else if (mod && e.shiftKey && (e.key === 'E' || e.key === 'e')) {
     e.preventDefault();
     setActiveView('explorer');
+  } else if (mod && e.shiftKey && (e.key === 'B' || e.key === 'b')) {
+    e.preventDefault();
+    setActiveView('blueprint');
   } else if (e.key === 'Escape') {
     if (app.generating) cancelGeneration();
   }
@@ -321,6 +365,11 @@ async function init(): Promise<void> {
     saveChapter: async (id, content) => {
       const updated = await api.saveChapter(id, { content });
       patchChapter(updated);
+    },
+    saveDoc: async (kind, docId, content) => {
+      const novelId = app.currentNovel?.id;
+      if (novelId == null) return;
+      await api.saveDoc(kind, docId, { body: content, novelId });
     },
     requestSuggestion: async (req, chapterId) => {
       const res = await fetch(apiUrl('/api/ai/autocomplete'), {

@@ -1,14 +1,20 @@
 :root {
-  --bg: #1e1e24;
-  --bg-soft: #25252d;
-  --bg-hover: #2f2f3a;
-  --border: #3a3a46;
-  --fg: #d8d6d0;
-  --fg-dim: #9a988f;
-  --muted: #6b6a63;
-  --accent: #c9a26a;
-  --accent-dim: #8f744c;
-  --danger: #c96a6a;
+  --bg: #1e1e1e; /* 编辑器底 */
+  --bg-soft: #252526; /* 侧边栏底 */
+  --bg-hover: #2a2d2e; /* 悬停 */
+  --border: #3c3c3c;
+  --fg: #cccccc;
+  --fg-dim: #969696;
+  --muted: #6f6f6f;
+  --accent: #007acc; /* Dark+ 经典蓝 */
+  --accent-dim: #005a9e;
+  --danger: #f14c4c;
+  /* VSCode 专属区域 */
+  --activitybar-bg: #333333;
+  --tab-bg: #2d2d2d;
+  --tab-active-bg: #1e1e1e;
+  --statusbar-bg: #007acc;
+  --statusbar-fg: #ffffff;
 }
 
 * {
@@ -51,8 +57,7 @@ body {
   align-items: center;
   gap: 2px;
   padding: 6px 0;
-  border-right: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--activitybar-bg);
   overflow-y: auto;
 }
 
@@ -64,7 +69,7 @@ body {
   justify-content: center;
   border: none;
   background: none;
-  color: var(--muted);
+  color: #858585;
   cursor: pointer;
   border-radius: 6px;
   position: relative;
@@ -76,7 +81,7 @@ body {
 }
 
 .activity-item.active {
-  color: var(--accent);
+  color: var(--fg);
   background: var(--bg-hover);
 }
 
@@ -163,8 +168,7 @@ body {
   align-items: stretch;
   flex-shrink: 0;
   height: 35px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--bg-soft);
   overflow-x: auto;
   scrollbar-width: thin;
 }
@@ -179,7 +183,7 @@ body {
   gap: 6px;
   padding: 0 10px 0 12px;
   max-width: 200px;
-  border-right: 1px solid var(--border);
+  background: var(--tab-bg);
   color: var(--fg-dim);
   font-size: 13px;
   cursor: pointer;
@@ -194,7 +198,8 @@ body {
 
 .tab.active {
   color: var(--fg);
-  background: var(--bg-soft);
+  background: var(--tab-active-bg);
+  box-shadow: inset 0 1px 0 var(--accent);
 }
 
 .tab-title {
@@ -271,9 +276,8 @@ body {
   justify-content: space-between;
   padding: 0 10px;
   font-size: 12px;
-  color: var(--fg-dim);
-  background: #191920;
-  border-top: 1px solid var(--border);
+  color: var(--statusbar-fg);
+  background: var(--statusbar-bg);
 }
 
 .statusbar-left,
@@ -298,31 +302,31 @@ body {
 }
 
 .statusbar-save {
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .statusbar-save.dirty {
-  color: var(--accent);
+  color: #ffd479;
 }
 
 .statusbar-ai {
-  color: var(--muted);
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .statusbar-ai.working {
-  color: var(--accent);
+  color: #e8e8e8;
 }
 
 .statusbar-ai.warn {
-  color: #d8b26a;
+  color: #ffd479;
 }
 
 .statusbar-ai.error {
-  color: var(--danger);
+  color: #ff9999;
 }
 
 .statusbar-ai.ok {
-  color: #8fbe7a;
+  color: #a5d6a7;
 }
 
 /* ---- 通用按钮/输入 ---- */
@@ -345,13 +349,13 @@ body {
 .btn-primary {
   background: var(--accent-dim);
   border-color: var(--accent-dim);
-  color: #1e1e24;
+  color: #fff;
 }
 
 .btn-primary:hover {
   background: var(--accent);
   border-color: var(--accent);
-  color: #1e1e24;
+  color: #fff;
 }
 
 .btn-danger {
@@ -434,6 +438,15 @@ body {
   text-overflow: ellipsis;
 }
 
+.tree-novel-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0 4px;
+}
+
 .chapter-list {
   margin-left: 14px;
   border-left: 1px solid var(--border);
@@ -496,6 +509,102 @@ body {
 
 .row-actions button.danger:hover {
   color: var(--danger);
+}
+
+/* ---- 资源管理器（文件夹树） ---- */
+.tree-folder {
+  position: relative;
+}
+
+.tree-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 8px;
+  border-radius: 0 6px 6px 0;
+  cursor: pointer;
+  color: var(--fg-dim);
+  font-size: 13px;
+}
+
+.tree-folder-head:hover {
+  background: var(--bg-hover);
+}
+
+.tree-folder-head .caret {
+  width: 8px;
+  flex-shrink: 0;
+  color: var(--muted);
+  transition: transform 0.1s;
+}
+
+.tree-folder-head .caret.open {
+  transform: rotate(90deg);
+}
+
+.tree-folder-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tree-folder-head .row-actions {
+  opacity: 0;
+}
+
+.tree-folder-head:hover .row-actions {
+  opacity: 1;
+}
+
+.chapter-list.collapsed {
+  display: none;
+}
+
+.tree-doc {
+  display: flex;
+  align-items: center;
+  padding: 4px 6px 4px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--fg-dim);
+  font-size: 13px;
+}
+
+.tree-doc:hover {
+  background: var(--bg-hover);
+  color: var(--fg);
+}
+
+.tree-doc.active {
+  color: var(--accent);
+  background: var(--bg-hover);
+}
+
+.tree-doc-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--muted);
+}
+
+.tree-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+  background: var(--bg-hover);
 }
 
 /* ---- 管理视图（人物/世界观/伏笔/文风/细纲/素材库） ---- */
@@ -570,6 +679,37 @@ body {
   width: 100%;
 }
 
+.scene-chars {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scene-char {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-soft);
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.scene-char:hover {
+  background: var(--bg-hover);
+}
+
+.scene-char input {
+  accent-color: var(--accent);
+}
+
+.scene-char-name {
+  user-select: none;
+}
+
 .view-form-row {
   display: flex;
   gap: 8px;
@@ -597,6 +737,25 @@ body {
 
 .view-back {
   align-self: flex-start;
+}
+
+/* ---- 轻量 SLS 一致性检查（lint 波浪线） ---- */
+.cm-lintRange-error {
+  border-bottom: 2px dotted var(--danger);
+}
+.cm-lintRange-warning {
+  border-bottom: 2px dotted var(--accent);
+}
+.cm-lintRange-info {
+  border-bottom: 1px dotted var(--fg-dim);
+}
+.cm-tooltip-lint {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  border-radius: 4px;
+  padding: 4px 8px;
 }
 
 /* ---- 幽灵文本 ---- */

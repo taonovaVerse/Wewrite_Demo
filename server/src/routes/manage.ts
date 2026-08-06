@@ -1,20 +1,32 @@
 import { Router } from 'express';
-import { db } from '../db.js';
+import {
+  listKindDocs,
+  getDoc,
+  getStyleDoc,
+  createDoc,
+  writeDoc,
+  deleteDoc,
+  findDoc,
+} from '../fs/docFs.js';
+import type { DocRow } from '../types.js';
+
+// 人物卡/世界观/伏笔/文风 已迁到 .docs/<类>/*.md 文件，这里读写文件、返回 JSON 形状与旧表完全一致（客户端零改动）。
+// 注意：老路由的 PUT/DELETE 只带 id（不带 novelId），故用 findDoc 反查所属小说。
 
 export const manageRouter = Router();
 
 // ---------- 人物卡 ----------
 
-const listCharactersStmt = db.prepare('SELECT * FROM characters WHERE novel_id = ? ORDER BY id');
-const insertCharacterStmt = db.prepare(
-  `INSERT INTO characters (novel_id, name, profile, speaking_style, status)
-   VALUES (?, ?, ?, ?, ?)`
-);
-const getCharacterStmt = db.prepare('SELECT * FROM characters WHERE id = ?');
-const updateCharacterStmt = db.prepare(
-  'UPDATE characters SET name = ?, profile = ?, speaking_style = ?, status = ? WHERE id = ?'
-);
-const deleteCharacterStmt = db.prepare('DELETE FROM characters WHERE id = ?');
+function characterShape(d: DocRow) {
+  return {
+    id: d.id,
+    novel_id: d.novel_id,
+    name: String(d.fields.name ?? ''),
+    profile: String(d.fields.profile ?? ''),
+    speaking_style: String(d.fields.speaking_style ?? ''),
+    status: String(d.fields.status ?? ''),
+  };
+}
 
 manageRouter.get('/characters', (req, res) => {
   const novelId = Number(req.query.novelId);
@@ -22,7 +34,7 @@ manageRouter.get('/characters', (req, res) => {
     res.status(400).json({ error: '缺少 novelId' });
     return;
   }
-  res.json(listCharactersStmt.all(novelId));
+  res.json(listKindDocs(novelId, 'characters').map(characterShape));
 });
 
 manageRouter.post('/characters', (req, res) => {
@@ -35,47 +47,59 @@ manageRouter.post('/characters', (req, res) => {
   const profile = String(req.body?.profile ?? '');
   const speakingStyle = String(req.body?.speakingStyle ?? '');
   const status = String(req.body?.status ?? '');
-  const result = insertCharacterStmt.run(novelId, name, profile, speakingStyle, status);
-  res.status(201).json(getCharacterStmt.get(result.lastInsertRowid));
+  const doc = createDoc(novelId, 'characters', name);
+  const updated = writeDoc(doc, {
+    fields: { profile, speaking_style: speakingStyle, status },
+  });
+  res.status(201).json(characterShape(updated));
 });
 
 manageRouter.put('/characters/:id', (req, res) => {
   const id = Number(req.params.id);
-  const existing = getCharacterStmt.get(id) as
-    | { name: string; profile: string; speaking_style: string; status: string }
-    | undefined;
-  if (!existing) {
+  const hit = findDoc('characters', id);
+  if (!hit) {
     res.status(404).json({ error: '人物不存在' });
     return;
   }
-  const name = req.body?.name !== undefined ? String(req.body.name) : existing.name;
-  const profile = req.body?.profile !== undefined ? String(req.body.profile) : existing.profile;
+  const existing = hit.doc;
+  const name =
+    req.body?.name !== undefined ? String(req.body.name) : String(existing.fields.name ?? '');
+  const profile =
+    req.body?.profile !== undefined ? String(req.body.profile) : String(existing.fields.profile ?? '');
   const speakingStyle =
     req.body?.speakingStyle !== undefined
       ? String(req.body.speakingStyle)
-      : existing.speaking_style;
-  const status = req.body?.status !== undefined ? String(req.body.status) : existing.status;
-  updateCharacterStmt.run(name, profile, speakingStyle, status, id);
-  res.json(getCharacterStmt.get(id));
+      : String(existing.fields.speaking_style ?? '');
+  const status =
+    req.body?.status !== undefined ? String(req.body.status) : String(existing.fields.status ?? '');
+  const updated = writeDoc(existing, {
+    fields: { name, profile, speaking_style: speakingStyle, status },
+    title: name, // 改名联动文件名
+  });
+  res.json(characterShape(updated));
 });
 
-manageRouter.delete('/characters/:id', (req, res) => {
+manageRouter.delete('/characters/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!getCharacterStmt.get(id)) {
+  const hit = findDoc('characters', id);
+  if (!hit) {
     res.status(404).json({ error: '人物不存在' });
     return;
   }
-  deleteCharacterStmt.run(id);
+  await deleteDoc(hit.novelId, 'characters', id);
   res.status(204).end();
 });
 
 // ---------- 世界观 ----------
 
-const listSettingsStmt = db.prepare('SELECT * FROM world_settings WHERE novel_id = ? ORDER BY id');
-const insertSettingStmt = db.prepare('INSERT INTO world_settings (novel_id, key, value) VALUES (?, ?, ?)');
-const getSettingStmt = db.prepare('SELECT * FROM world_settings WHERE id = ?');
-const updateSettingStmt = db.prepare('UPDATE world_settings SET key = ?, value = ? WHERE id = ?');
-const deleteSettingStmt = db.prepare('DELETE FROM world_settings WHERE id = ?');
+function settingShape(d: DocRow) {
+  return {
+    id: d.id,
+    novel_id: d.novel_id,
+    key: String(d.fields.key ?? ''),
+    value: String(d.fields.value ?? ''),
+  };
+}
 
 manageRouter.get('/world-settings', (req, res) => {
   const novelId = Number(req.query.novelId);
@@ -83,7 +107,7 @@ manageRouter.get('/world-settings', (req, res) => {
     res.status(400).json({ error: '缺少 novelId' });
     return;
   }
-  res.json(listSettingsStmt.all(novelId));
+  res.json(listKindDocs(novelId, 'world').map(settingShape));
 });
 
 manageRouter.post('/world-settings', (req, res) => {
@@ -94,44 +118,52 @@ manageRouter.post('/world-settings', (req, res) => {
     return;
   }
   const value = String(req.body?.value ?? '');
-  const result = insertSettingStmt.run(novelId, key, value);
-  res.status(201).json(getSettingStmt.get(result.lastInsertRowid));
+  const doc = createDoc(novelId, 'world', key);
+  const updated = writeDoc(doc, { fields: { value } });
+  res.status(201).json(settingShape(updated));
 });
 
 manageRouter.put('/world-settings/:id', (req, res) => {
   const id = Number(req.params.id);
-  const existing = getSettingStmt.get(id) as { key: string; value: string } | undefined;
-  if (!existing) {
+  const hit = findDoc('world', id);
+  if (!hit) {
     res.status(404).json({ error: '设定不存在' });
     return;
   }
-  const key = req.body?.key !== undefined ? String(req.body.key) : existing.key;
-  const value = req.body?.value !== undefined ? String(req.body.value) : existing.value;
-  updateSettingStmt.run(key, value, id);
-  res.json(getSettingStmt.get(id));
+  const existing = hit.doc;
+  const key =
+    req.body?.key !== undefined ? String(req.body.key) : String(existing.fields.key ?? '');
+  const value =
+    req.body?.value !== undefined ? String(req.body.value) : String(existing.fields.value ?? '');
+  const updated = writeDoc(existing, {
+    fields: { key, value },
+    title: key, // 改名联动文件名
+  });
+  res.json(settingShape(updated));
 });
 
-manageRouter.delete('/world-settings/:id', (req, res) => {
+manageRouter.delete('/world-settings/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!getSettingStmt.get(id)) {
+  const hit = findDoc('world', id);
+  if (!hit) {
     res.status(404).json({ error: '设定不存在' });
     return;
   }
-  deleteSettingStmt.run(id);
+  await deleteDoc(hit.novelId, 'world', id);
   res.status(204).end();
 });
 
 // ---------- 伏笔 ----------
 
-const listForeshadowStmt = db.prepare('SELECT * FROM foreshadowing WHERE novel_id = ? ORDER BY id');
-const insertForeshadowStmt = db.prepare(
-  'INSERT INTO foreshadowing (novel_id, planted_chapter, resolved_chapter, note) VALUES (?, ?, ?, ?)'
-);
-const getForeshadowStmt = db.prepare('SELECT * FROM foreshadowing WHERE id = ?');
-const updateForeshadowStmt = db.prepare(
-  'UPDATE foreshadowing SET planted_chapter = ?, resolved_chapter = ?, note = ? WHERE id = ?'
-);
-const deleteForeshadowStmt = db.prepare('DELETE FROM foreshadowing WHERE id = ?');
+function foreshadowShape(d: DocRow) {
+  return {
+    id: d.id,
+    novel_id: d.novel_id,
+    planted_chapter: (d.fields.planted_chapter as number | null | undefined) ?? null,
+    resolved_chapter: (d.fields.resolved_chapter as number | null | undefined) ?? null,
+    note: String(d.fields.note ?? ''),
+  };
+}
 
 manageRouter.get('/foreshadowing', (req, res) => {
   const novelId = Number(req.query.novelId);
@@ -139,7 +171,7 @@ manageRouter.get('/foreshadowing', (req, res) => {
     res.status(400).json({ error: '缺少 novelId' });
     return;
   }
-  res.json(listForeshadowStmt.all(novelId));
+  res.json(listKindDocs(novelId, 'foreshadow').map(foreshadowShape));
 });
 
 manageRouter.post('/foreshadowing', (req, res) => {
@@ -151,51 +183,59 @@ manageRouter.post('/foreshadowing', (req, res) => {
   }
   const planted = req.body?.plantedChapter != null ? Number(req.body.plantedChapter) : null;
   const resolved = req.body?.resolvedChapter != null ? Number(req.body.resolvedChapter) : null;
-  const result = insertForeshadowStmt.run(novelId, planted, resolved, note);
-  res.status(201).json(getForeshadowStmt.get(result.lastInsertRowid));
+  const doc = createDoc(novelId, 'foreshadow');
+  const updated = writeDoc(doc, {
+    fields: { note, planted_chapter: planted, resolved_chapter: resolved },
+  });
+  res.status(201).json(foreshadowShape(updated));
 });
 
 manageRouter.put('/foreshadowing/:id', (req, res) => {
   const id = Number(req.params.id);
-  const existing = getForeshadowStmt.get(id) as
-    | { planted_chapter: number | null; resolved_chapter: number | null; note: string }
-    | undefined;
-  if (!existing) {
+  const hit = findDoc('foreshadow', id);
+  if (!hit) {
     res.status(404).json({ error: '伏笔不存在' });
     return;
   }
+  const existing = hit.doc;
   const planted =
     req.body?.plantedChapter !== undefined
       ? (Number(req.body.plantedChapter) || null)
-      : existing.planted_chapter;
+      : (existing.fields.planted_chapter as number | null | undefined) ?? null;
   const resolved =
     req.body?.resolvedChapter !== undefined
       ? (Number(req.body.resolvedChapter) || null)
-      : existing.resolved_chapter;
-  const note = req.body?.note !== undefined ? String(req.body.note) : existing.note;
-  updateForeshadowStmt.run(planted, resolved, note, id);
-  res.json(getForeshadowStmt.get(id));
+      : (existing.fields.resolved_chapter as number | null | undefined) ?? null;
+  const note =
+    req.body?.note !== undefined ? String(req.body.note) : String(existing.fields.note ?? '');
+  const updated = writeDoc(existing, {
+    fields: { note, planted_chapter: planted, resolved_chapter: resolved },
+  });
+  res.json(foreshadowShape(updated));
 });
 
-manageRouter.delete('/foreshadowing/:id', (req, res) => {
+manageRouter.delete('/foreshadowing/:id', async (req, res) => {
   const id = Number(req.params.id);
-  if (!getForeshadowStmt.get(id)) {
+  const hit = findDoc('foreshadow', id);
+  if (!hit) {
     res.status(404).json({ error: '伏笔不存在' });
     return;
   }
-  deleteForeshadowStmt.run(id);
+  await deleteDoc(hit.novelId, 'foreshadow', id);
   res.status(204).end();
 });
 
-// ---------- 文风档案（每部小说一条，按 novelId 取或建） ----------
+// ---------- 文风档案（每部小说单例） ----------
 
-const getStyleStmt = db.prepare('SELECT * FROM style_profiles WHERE novel_id = ?');
-const insertStyleStmt = db.prepare(
-  'INSERT INTO style_profiles (novel_id, voice, rhythm_notes, taboo_words) VALUES (?, ?, ?, ?)'
-);
-const updateStyleStmt = db.prepare(
-  'UPDATE style_profiles SET voice = ?, rhythm_notes = ?, taboo_words = ? WHERE novel_id = ?'
-);
+function styleShape(d: DocRow) {
+  return {
+    id: d.id,
+    novel_id: d.novel_id,
+    voice: String(d.fields.voice ?? ''),
+    rhythm_notes: String(d.fields.rhythm_notes ?? ''),
+    taboo_words: String(d.fields.taboo_words ?? ''),
+  };
+}
 
 manageRouter.get('/style-profile', (req, res) => {
   const novelId = Number(req.query.novelId);
@@ -203,14 +243,12 @@ manageRouter.get('/style-profile', (req, res) => {
     res.status(400).json({ error: '缺少 novelId' });
     return;
   }
-  const row = getStyleStmt.get(novelId) as
-    | { id: number; novel_id: number; voice: string; rhythm_notes: string; taboo_words: string }
-    | undefined;
-  if (!row) {
+  const doc = getStyleDoc(novelId);
+  if (!doc) {
     res.json({ id: null, novel_id: novelId, voice: '', rhythm_notes: '', taboo_words: '' });
     return;
   }
-  res.json(row);
+  res.json(styleShape(doc));
 });
 
 manageRouter.put('/style-profile', (req, res) => {
@@ -222,11 +260,10 @@ manageRouter.put('/style-profile', (req, res) => {
   const voice = String(req.body?.voice ?? '');
   const rhythmNotes = String(req.body?.rhythmNotes ?? '');
   const tabooWords = String(req.body?.tabooWords ?? '');
-  const existing = getStyleStmt.get(novelId);
-  if (existing) {
-    updateStyleStmt.run(voice, rhythmNotes, tabooWords, novelId);
-  } else {
-    insertStyleStmt.run(novelId, voice, rhythmNotes, tabooWords);
-  }
-  res.json(getStyleStmt.get(novelId));
+  const existing = getStyleDoc(novelId);
+  const doc = existing ?? createDoc(novelId, 'style');
+  const updated = writeDoc(doc, {
+    fields: { voice, rhythm_notes: rhythmNotes, taboo_words: tabooWords },
+  });
+  res.json(styleShape(updated));
 });

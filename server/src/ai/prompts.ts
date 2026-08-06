@@ -34,8 +34,37 @@ export interface CharacterCtx {
   status: string;
 }
 
+export interface Scene {
+  location: string;
+  time_frame: string;
+  emotion: string;
+  theme: string;
+}
+
+function sceneLines(scene: Partial<Scene>): string[] {
+  const rows: [string, string | undefined][] = [
+    ['地点', scene.location],
+    ['时间段', scene.time_frame],
+    ['情绪', scene.emotion],
+    ['主题', scene.theme],
+  ];
+  const out: string[] = [];
+  for (const [k, v] of rows) {
+    if (v?.trim()) out.push(`${k}：${v}`);
+  }
+  return out;
+}
+
+/** 场景信息非空时，以「当前场景」区块注入 prompt */
+function pushSceneSection(parts: string[], scene: Partial<Scene> | undefined): void {
+  if (!scene) return;
+  const lines = sceneLines(scene);
+  if (lines.length > 0) parts.push(section('当前场景', lines.join('\n')));
+}
+
 export interface ContinueContext {
   style: { voice: string; rhythm_notes: string; taboo_words: string };
+  scene?: Scene;
   characters: CharacterCtx[];
   settings: { key: string; value: string }[];
   foreshadowing: string[];
@@ -60,6 +89,7 @@ export const DETAIL_SYSTEM = `你是一位善于捕捉生活质感的中文小�
 
 export interface DetailContext {
   style: { voice: string; taboo_words: string };
+  scene?: Scene;
   scenePrompt: string;
   before: string;
   examples: string[];
@@ -75,6 +105,7 @@ export function formatDetailUser(data: DetailContext): string {
         .join('\n'),
     ),
   );
+  pushSceneSection(parts, data.scene);
   parts.push(section('卡壳场景', data.scenePrompt || '（未指定，请基于上下文自然展开）'));
   if (data.before) parts.push(section('当前正文（衔接处）', data.before.slice(-800)));
   if (data.examples.length > 0) {
@@ -91,6 +122,7 @@ export function formatDetailUser(data: DetailContext): string {
 
 export interface AutocompleteContext {
   style: { voice: string; taboo_words: string };
+  scene?: Partial<Scene>;
   before: string;
   after: string;
 }
@@ -100,6 +132,7 @@ export function formatAutocompleteUser(data: AutocompleteContext): string {
   styleLines.push(`禁用词：${data.style.taboo_words || DEFAULT_TABOO}`);
   const parts: string[] = [];
   parts.push(section('文风档案', styleLines.filter(Boolean).join('\n')));
+  pushSceneSection(parts, data.scene);
   parts.push(section('前文（光标前）', data.before || '（空）'));
   parts.push(section('后文（光标后）', data.after || '（空）'));
   parts.push('## 补全光标处：');
@@ -114,6 +147,8 @@ export function formatContinueUser(data: ContinueContext): string {
   const taboo = data.style.taboo_words || DEFAULT_TABOO;
   styleLines.push(`禁用词：${taboo}`);
   parts.push(section('文风档案', styleLines.filter(Boolean).join('\n')));
+
+  pushSceneSection(parts, data.scene);
 
   if (data.characters.length > 0) {
     parts.push(
