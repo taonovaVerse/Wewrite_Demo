@@ -4,8 +4,8 @@
 //  - folder      = 章节所在文件夹的相对路径（'' = 小说根目录）
 //  - path        = 相对小说根的 .md 路径（如 '第一卷/第一章.md'）
 
-/** 世界文档类型：5 类管理数据在磁盘 .docs/<类>/*.md 的 kind */
-export type DocKind = 'characters' | 'world' | 'foreshadow' | 'style' | 'bank';
+/** 世界文档类型：6 类管理数据在磁盘 .docs/<类>/*.md 的 kind（人物关系为单例图边存储） */
+export type DocKind = 'characters' | 'world' | 'foreshadow' | 'style' | 'bank' | 'relations';
 
 /** 世界文档：从 .docs 文件解析的结果。fields 存结构化字段（front-matter，除 id），body 为正文 */
 export interface DocRow {

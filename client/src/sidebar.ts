@@ -1,22 +1,21 @@
 import { explorerView } from './views/explorer';
-import { charactersView } from './views/characters';
+import { relationsView } from './views/relations';
 import { worldView } from './views/world';
 import { foreshadowView } from './views/foreshadow';
 import { styleView } from './views/style';
 import { blueprintView } from './views/blueprint';
-import { bankView } from './views/bank';
 import { historyView } from './views/history';
 import type { ViewId, SidebarView } from './views/types';
 import { el } from './ui';
+import { graphPanel } from './graphPanel';
 
 const views: Record<ViewId, SidebarView> = {
   explorer: explorerView,
-  characters: charactersView,
+  characters: relationsView,
   world: worldView,
   foreshadow: foreshadowView,
   style: styleView,
   blueprint: blueprintView,
-  bank: bankView,
   history: historyView,
 };
 
@@ -27,11 +26,14 @@ const VIEW_TITLES: Record<ViewId, string> = {
   foreshadow: '伏笔',
   style: '文风',
   blueprint: '章节细纲',
-  bank: '素材库',
   history: '历史',
 };
 
 let active: ViewId = 'explorer';
+
+export function getActiveViewId(): ViewId {
+  return active;
+}
 
 export function setActiveView(id: ViewId): void {
   active = id;
@@ -62,4 +64,6 @@ async function render(): Promise<void> {
   const body = document.getElementById('sidebar-body')!;
   body.innerHTML = '';
   await view.render(body);
+  // 关系图板：切到人物卡视图即显示，与编辑器左右分栏共存
+  graphPanel.syncVisibility(active);
 }

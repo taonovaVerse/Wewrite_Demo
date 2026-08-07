@@ -115,7 +115,11 @@ export class TabManager {
 
   switchTo(key: string): void {
     const next = this.tabs.get(key);
-    if (!next || key === this.activeKey) return;
+    if (!next) return;
+    if (key === this.activeKey) {
+      // 已激活 tab 再被点击：不做重复切换
+      return;
+    }
     this.handle.cancelSuggestion();
     void this.flushActive();
     this.applyState(next.savedState);

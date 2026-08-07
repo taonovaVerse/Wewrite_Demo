@@ -245,8 +245,17 @@ body {
   color: var(--accent);
 }
 
+#editor-split {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+}
+
 #editor-wrap {
   flex: 1;
+  min-width: 0;
   min-height: 0;
   overflow: auto;
   position: relative;
@@ -393,6 +402,10 @@ body {
 }
 
 .tree-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -699,6 +712,137 @@ body {
 .diff-meta {
   color: var(--muted);
   font-style: italic;
+}
+
+/* ---- 人物关系图板（主编辑区） ---- */
+#graph-resizer {
+  flex: 0 0 5px;
+  width: 5px;
+  cursor: col-resize;
+  touch-action: none;
+  border-left: 1px solid var(--border);
+}
+
+#graph-resizer:hover,
+#graph-resizer.active {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+#graph-panel {
+  flex: 0 0 340px;
+  width: 340px;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+.graph-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.graph-canvas.panning {
+  cursor: grabbing;
+}
+
+.graph-empty {
+  fill: var(--muted);
+  font-size: 14px;
+}
+
+.graph-node {
+  cursor: pointer;
+}
+
+.graph-node circle {
+  fill: var(--bg-soft);
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.graph-node.main circle {
+  fill: #0d3a5c;
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.graph-node text {
+  fill: var(--fg-dim);
+  font-size: 12px;
+  text-anchor: middle;
+  user-select: none;
+}
+
+.graph-node.main text {
+  fill: #fff;
+  font-weight: 600;
+}
+
+.graph-node.selected circle {
+  stroke: #fff;
+  stroke-width: 2.5;
+}
+
+.graph-edge-line {
+  stroke: var(--muted);
+  stroke-width: 1.5;
+}
+
+.graph-edge-hit {
+  stroke: transparent;
+  stroke-width: 14;
+  cursor: pointer;
+}
+
+.graph-edge-label {
+  fill: var(--fg-dim);
+  font-size: 11px;
+  text-anchor: middle;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 3px;
+}
+
+.graph-edge.selected .graph-edge-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+.graph-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.graph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.graph-toggle input,
+.graph-char-main input {
+  accent-color: var(--accent);
+}
+
+.graph-char-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  cursor: pointer;
 }
 
 .view-form {

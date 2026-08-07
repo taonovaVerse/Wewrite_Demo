@@ -52,6 +52,43 @@ function seedNovelsIfEmpty(): void {
   writeChapter({ ...chapter, content: sample });
   const style = createDoc(novel.id, 'style');
   writeDoc(style, { fields: { voice: '冷峻克制，白描为主，细节走具体物件与动作，避免抒情' } });
+
+  // 示例人物与关系：贴合第一章（收银台复读男生 / 买关东煮的她），切到人物卡即可看到关系图
+  const seedChars = [
+    {
+      name: '沈星', profile: '便利店的晚班店员，复读高三学生', speaking_style: '话少，答话简短', status: '深夜值晚班',
+    },
+    {
+      name: '林晚', profile: '夜归的常客，来买关东煮', speaking_style: '语气平淡，爱点萝卜和海带结', status: '深夜路过',
+    },
+    {
+      name: '老周', profile: '出租车司机，每天收工前买包烟', speaking_style: '嗓门大，爱闲聊', status: '刚收车',
+    },
+    {
+      name: '阿水', profile: '隔壁烧烤摊老板，深夜来补货', speaking_style: '笑呵呵，叫沈星「小沈」', status: '收摊路过',
+    },
+  ];
+  const charDocs = seedChars.map((c) => {
+    const doc = createDoc(novel.id, 'characters', c.name);
+    const updated = writeDoc(doc, {
+      fields: {
+        profile: c.profile,
+        speaking_style: c.speaking_style,
+        status: c.status,
+        main: c.name === '沈星' || c.name === '林晚' ? '1' : '',
+      },
+    });
+    return updated;
+  });
+  const [shen, lin, lao, a] = charDocs;
+  const relDoc = createDoc(novel.id, 'relations');
+  const edges = [
+    { a: shen.id, b: lin.id, label: '熟客', note: '每晚都来' },
+    { a: shen.id, b: lao.id, label: '常客', note: '买烟闲聊' },
+    { a: shen.id, b: a.id, label: '邻居', note: '补货顺道' },
+    { a: lin.id, b: lao.id, label: '打照面', note: '都在深夜出现' },
+  ];
+  writeDoc(relDoc, { fields: { edges: JSON.stringify(edges) } });
 }
 
 migrateNovelRegistry(); // novels 表 → 每部小说 .wewrite/novel.json + .registry.json

@@ -25,7 +25,13 @@ function characterShape(d: DocRow) {
     profile: String(d.fields.profile ?? ''),
     speaking_style: String(d.fields.speaking_style ?? ''),
     status: String(d.fields.status ?? ''),
+    main: String(d.fields.main ?? '') === '1',
   };
+}
+
+/** body 里 main 的布尔/字符串归一化成 "1" 或空串（空串会被 writeDoc 删除字段） */
+function mainFlag(v: unknown): string {
+  return v === true || v === '1' || v === 1 ? '1' : '';
 }
 
 manageRouter.get('/characters', (req, res) => {
@@ -49,7 +55,7 @@ manageRouter.post('/characters', (req, res) => {
   const status = String(req.body?.status ?? '');
   const doc = createDoc(novelId, 'characters', name);
   const updated = writeDoc(doc, {
-    fields: { profile, speaking_style: speakingStyle, status },
+    fields: { profile, speaking_style: speakingStyle, status, main: mainFlag(req.body?.main) },
   });
   res.status(201).json(characterShape(updated));
 });
@@ -72,8 +78,12 @@ manageRouter.put('/characters/:id', (req, res) => {
       : String(existing.fields.speaking_style ?? '');
   const status =
     req.body?.status !== undefined ? String(req.body.status) : String(existing.fields.status ?? '');
+  const main =
+    req.body?.main !== undefined
+      ? mainFlag(req.body.main)
+      : String(existing.fields.main ?? '');
   const updated = writeDoc(existing, {
-    fields: { name, profile, speaking_style: speakingStyle, status },
+    fields: { name, profile, speaking_style: speakingStyle, status, main },
     title: name, // 改名联动文件名
   });
   res.json(characterShape(updated));

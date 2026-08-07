@@ -1,22 +1,20 @@
 import { app, activeChapterId } from '../app';
-import { api, type Novel, type Chapter, type FileNode, type DocKind, type DocRow } from '../api';
+import { api, type Novel, type Chapter, type FileNode, type DocRow } from '../api';
 import { el, confirmDelete } from '../ui';
 import { ask } from '../quickInput';
-import { refresh, setActiveView } from '../sidebar';
+import { refresh } from '../sidebar';
 import {
   selectNovel,
   createNovel,
   createChapter,
-  renameChapter,
   deleteChapter,
   moveChapter,
   createDoc as createNovelDoc,
   deleteDoc as deleteNovelDoc,
   openNovelFolder,
-  renameNovel,
   deleteNovel,
 } from '../novels';
-import type { SidebarView, ViewId } from './types';
+import type { SidebarView } from './types';
 
 /** 「+ 新建章节」的落点文件夹（相对小说根，'' = 根目录）；点文件夹行时更新 */
 let currentFolder = '';
@@ -47,7 +45,7 @@ async function render(container: HTMLElement): Promise<void> {
   for (const novel of app.novels) {
     section.appendChild(novelTree(novel));
   }
-  section.appendChild(docsGroup());
+  section.appendChild(bankDocsSection());
   container.appendChild(section);
 }
 
@@ -59,10 +57,7 @@ function novelTree(novel: Novel): HTMLElement {
   row.append(caret, el('span', 'tree-novel-title', novel.title));
   if (novel.external) row.appendChild(el('span', 'tree-novel-badge', '外部'));
   const actions = el('div', 'row-actions');
-  actions.append(
-    rowBtn('改', '重命名小说', () => void doRenameNovel(novel)),
-    rowBtn('删', '删除小说', () => void doDeleteNovel(novel), true),
-  );
+  actions.append(rowBtn('×', '删除小说', () => void doDeleteNovel(novel), true));
   row.appendChild(actions);
   row.addEventListener('click', () => {
     if (isActive) return;
@@ -125,8 +120,7 @@ function folderRow(node: FileNode): HTMLElement {
   actions.append(
     rowBtn('章', '在此文件夹新建章节', () => void newChapterIn(node.path)),
     rowBtn('夹', '新建子文件夹', () => void newFolderIn(node.path)),
-    rowBtn('改', '重命名文件夹', () => void doRenameFolder(node)),
-    rowBtn('删', '删除文件夹（含全部内容）', () => void doDeleteFolder(node), true),
+    rowBtn('×', '删除文件夹（含全部内容）', () => void doDeleteFolder(node), true),
   );
   head.appendChild(actions);
   head.addEventListener('click', () => {
@@ -167,10 +161,7 @@ function fileRow(node: FileNode): HTMLElement {
   const title = el('span', 'tree-chapter-title', ch?.title ?? node.name.replace(/\.md$/, ''));
   row.append(treeIcon('file'), title);
   const actions = el('div', 'row-actions');
-  actions.append(
-    rowBtn('改', '重命名', () => ch && void doRename(ch)),
-    rowBtn('删', '删除章节', () => ch && void doDelete(ch), true),
-  );
+  actions.append(rowBtn('×', '删除章节', () => ch && void doDelete(ch), true));
   row.appendChild(actions);
   row.addEventListener('click', () => {
     if (ch) app.tabs?.openChapter(ch);
@@ -215,107 +206,6 @@ function rowBtn(
   return btn;
 }
 
-/** 树顶「文档」组：每类一个可展开文件夹行（表单/新建），子级为记录文件行 */
-const DOC_KINDS: Array<{ kind: DocKind; label: string; view: ViewId }> = [
-  { kind: 'characters', label: '人物卡', view: 'characters' },
-  { kind: 'world', label: '世界观', view: 'world' },
-  { kind: 'foreshadow', label: '伏笔', view: 'foreshadow' },
-  { kind: 'style', label: '文风', view: 'style' },
-  { kind: 'bank', label: '素材库', view: 'bank' },
-];
-
-function docsGroup(): HTMLElement {
-  const group = el('div', 'tree-section');
-  group.appendChild(el('div', 'tree-section-title', '文档'));
-  for (const meta of DOC_KINDS) group.appendChild(docFolderRow(meta));
-  return group;
-}
-
-function docFolderRow(meta: { kind: DocKind; label: string; view: ViewId }): HTMLElement {
-  const item = el('div', 'tree-folder');
-  const head = el('div', 'tree-folder-head');
-  const caret = el('span', 'caret open', '▶');
-  head.append(caret, treeIcon('folder'), el('span', 'tree-folder-name', meta.label));
-  const actions = el('div', 'row-actions');
-  actions.append(
-    rowBtn('表', '表单编辑', () => setActiveView(meta.view)),
-    rowBtn('＋', '新建记录', () => void newDoc(meta.kind)),
-  );
-  head.appendChild(actions);
-  head.addEventListener('click', () => {
-    const children = item.querySelector('.chapter-list');
-    if (children) {
-      const collapsed = children.classList.toggle('collapsed');
-      caret.classList.toggle('open', !collapsed);
-    }
-  });
-  item.appendChild(head);
-
-  const children = el('div', 'chapter-list');
-  const docs = (app.currentNovel?.docs ?? []).filter((d) => d.kind === meta.kind);
-  if (docs.length === 0) {
-    children.appendChild(el('div', 'view-hint', '暂无记录，点 ＋ 新建'));
-  } else {
-    for (const doc of docs) children.appendChild(docFileRow(doc));
-  }
-  item.appendChild(children);
-  return item;
-}
-
-function isActiveDoc(doc: DocRow): boolean {
-  const active = app.tabs?.active;
-  return active?.kind === 'doc' && active.docKind === doc.kind && active.docId === doc.id;
-}
-
-function docFileRow(doc: DocRow): HTMLElement {
-  const row = el('div', 'tree-doc' + (isActiveDoc(doc) ? ' active' : ''));
-  row.append(treeIcon('file'), el('span', 'tree-doc-title', doc.title));
-  const actions = el('div', 'row-actions');
-  if (doc.kind === 'characters' || doc.kind === 'world') {
-    actions.append(rowBtn('改', '重命名', () => void doRenameDoc(doc)));
-  }
-  actions.append(rowBtn('删', '删除文档', () => void doDeleteDoc(doc), true));
-  row.appendChild(actions);
-  row.addEventListener('click', () => app.tabs?.openDoc(doc));
-  return row;
-}
-
-async function newDoc(kind: DocKind): Promise<void> {
-  let title: string | undefined;
-  if (kind === 'characters' || kind === 'world') {
-    const label = kind === 'characters' ? '人物名' : '设定 key';
-    const name = await ask(`新建${DOC_KINDS.find((m) => m.kind === kind)?.label ?? ''}`, label);
-    if (name === null) return;
-    if (!name?.trim()) return;
-    title = name.trim();
-  }
-  await createNovelDoc(kind, title);
-  await refresh();
-}
-
-async function doRenameDoc(doc: DocRow): Promise<void> {
-  const current = String(
-    doc.kind === 'characters' ? (doc.fields.name ?? '') : (doc.fields.key ?? ''),
-  );
-  const name = await ask(doc.kind === 'characters' ? '人物名' : '设定 key', '', current);
-  if (!name || name.trim() === '' || name.trim() === current) return;
-  const novelId = app.currentNovel?.id;
-  if (novelId == null) return;
-  const fieldKey = doc.kind === 'characters' ? 'name' : 'key';
-  await api.saveDoc(doc.kind, doc.id, {
-    novelId,
-    fields: { [fieldKey]: name.trim() },
-    title: name.trim(),
-  });
-  await refresh();
-}
-
-async function doDeleteDoc(doc: DocRow): Promise<void> {
-  if (!confirmDelete(`文档「${doc.title}」`)) return;
-  await deleteNovelDoc(doc.kind, doc.id);
-  await refresh();
-}
-
 async function newNovel(): Promise<void> {
   const title = await ask('小说标题', '例如：雨夜便利店');
   if (!title?.trim()) return;
@@ -332,13 +222,6 @@ async function doOpenNovelFolder(): Promise<void> {
     alert(e instanceof Error ? e.message : '打开文件夹失败');
     return;
   }
-  await refresh();
-}
-
-async function doRenameNovel(novel: Novel): Promise<void> {
-  const title = await ask('小说标题', '', novel.title);
-  if (!title || title.trim() === '' || title.trim() === novel.title) return;
-  await renameNovel(novel.id, title);
   await refresh();
 }
 
@@ -374,24 +257,9 @@ async function newFolderIn(parent: string): Promise<void> {
   await refresh();
 }
 
-async function doRename(ch: Chapter): Promise<void> {
-  const title = await ask('章节标题', '', ch.title);
-  if (title === null || title.trim() === '' || title.trim() === ch.title) return;
-  await renameChapter(ch, title);
-  await refresh();
-}
-
 async function doDelete(ch: Chapter): Promise<void> {
   if (!confirmDelete(`章节「${ch.title || `第 ${ch.order_idx} 章`}」`)) return;
   await deleteChapter(ch.id);
-  await refresh();
-}
-
-async function doRenameFolder(node: FileNode): Promise<void> {
-  const name = await ask('文件夹名称', '', node.name);
-  if (!name || name.trim() === '' || name.trim() === node.name) return;
-  if (!app.currentNovel) return;
-  await api.renameFolder(app.currentNovel.id, node.path, name.trim());
   await refresh();
 }
 
@@ -407,6 +275,53 @@ async function doMove(chapterId: number, folder: string, beforeId?: number): Pro
   // 同夹、且非真正插入位：视为无操作
   if (src && src.folder === folder && (beforeId === undefined || beforeId === chapterId)) return;
   await moveChapter(chapterId, folder, beforeId);
+  await refresh();
+}
+
+/** 素材库区块：列出 .docs/素材库/*.md 文档文件，点击在编辑器里打开。
+ *  文档是纯 markdown，可写任意内容（含图片/文件引用），比结构化表单灵活。 */
+function bankDocsSection(): HTMLElement {
+  const group = el('div', 'tree-section');
+  const title = el('div', 'tree-section-title');
+  title.appendChild(el('span', '', '素材库'));
+  const add = rowBtn('＋', '新建素材文档', () => void newBankDoc());
+  add.className = 'sidebar-title-btn';
+  title.appendChild(add);
+  group.appendChild(title);
+
+  const list = el('div', 'chapter-list');
+  const docs = (app.currentNovel?.docs ?? []).filter((d) => d.kind === 'bank');
+  if (docs.length === 0) {
+    list.appendChild(
+      el('div', 'view-hint', '素材库为空。点 ＋ 新建，文档可写任意内容（含图片/文件引用）'),
+    );
+  } else {
+    for (const doc of docs) list.appendChild(bankDocRow(doc));
+  }
+  group.appendChild(list);
+  return group;
+}
+
+function bankDocRow(doc: DocRow): HTMLElement {
+  const active = app.tabs?.active;
+  const isActive = active?.kind === 'doc' && active.docKind === doc.kind && active.docId === doc.id;
+  const row = el('div', 'tree-doc' + (isActive ? ' active' : ''));
+  row.append(treeIcon('file'), el('span', 'tree-doc-title', doc.title));
+  const actions = el('div', 'row-actions');
+  actions.appendChild(rowBtn('×', '删除素材', () => void doDeleteBankDoc(doc), true));
+  row.appendChild(actions);
+  row.addEventListener('click', () => app.tabs?.openDoc(doc));
+  return row;
+}
+
+async function newBankDoc(): Promise<void> {
+  await createNovelDoc('bank');
+  await refresh();
+}
+
+async function doDeleteBankDoc(doc: DocRow): Promise<void> {
+  if (!confirmDelete(`素材「${doc.title}」`)) return;
+  await deleteNovelDoc('bank', doc.id);
   await refresh();
 }
 

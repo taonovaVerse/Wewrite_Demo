@@ -8,7 +8,7 @@ import type { DocKind } from '../types.js';
 
 export const docsRouter = Router();
 
-const KINDS: DocKind[] = ['characters', 'world', 'foreshadow', 'style', 'bank'];
+const KINDS: DocKind[] = ['characters', 'world', 'foreshadow', 'style', 'bank', 'relations'];
 
 function parseKind(s: string): DocKind | undefined {
   return KINDS.find((k) => k === s);

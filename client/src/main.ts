@@ -4,6 +4,7 @@ import { api } from './api';
 import { app, activeChapterId, patchChapter } from './app';
 import { apiUrl, initApiBase } from './apiBase';
 import { setActiveView, refresh } from './sidebar';
+import { graphPanel } from './graphPanel';
 import type { ViewId } from './views/types';
 import { ask, isQuickInputOpen } from './quickInput';
 import { isPickOpen, openPalette, openPick, registerCommand, setupPalette } from './commands';
@@ -40,7 +41,7 @@ function renderTabs(): void {
 
 function tabNode(tab: TabData): HTMLElement {
   const mgr = app.tabs!;
-  const active = mgr.activeId === tab.chapterId;
+  const active = mgr.activeKey === tab.key;
   const node = el('div', 'tab' + (active ? ' active' : ''));
   node.title = tab.title || `第 ${tab.orderIdx} 章`;
   if (tab.dirty) node.appendChild(el('span', 'tab-dirty', ''));
@@ -303,7 +304,6 @@ function registerCommands(): void {
     ['foreshadow', '伏笔'],
     ['style', '文风'],
     ['blueprint', '章节细纲'],
-    ['bank', '素材库'],
     ['history', '历史记录'],
   ];
   for (const [vid, label] of viewCmds) {
@@ -387,9 +387,15 @@ async function init(): Promise<void> {
       const data = (await res.json()) as { text?: string };
       return data.text ?? '';
     },
-    onTabsChange: renderTabs,
-    onActiveChange: renderStatusbar,
+    onTabsChange: () => {
+      renderTabs();
+    },
+    onActiveChange: () => {
+      renderStatusbar();
+    },
   });
+
+  graphPanel.mount();
 
   document.querySelectorAll('#activitybar .activity-item').forEach((node) => {
     node.addEventListener('click', () => {

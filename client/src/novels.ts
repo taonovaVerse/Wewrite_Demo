@@ -13,13 +13,6 @@ export async function reloadNovel(): Promise<void> {
 export async function selectNovel(id: number): Promise<void> {
   await app.tabs?.closeAll();
   app.currentNovel = await api.novel(id);
-  openFirstChapter();
-}
-
-export function openFirstChapter(): void {
-  const novel = app.currentNovel;
-  if (!novel || novel.chapters.length === 0) return;
-  app.tabs?.openChapter(novel.chapters[0]);
 }
 
 export async function createNovel(title: string): Promise<Novel> {

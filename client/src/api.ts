@@ -37,8 +37,8 @@ export interface FileNode {
   children?: FileNode[];
 }
 
-/** 世界文档类型：5 类管理数据在磁盘 .docs/<类>/*.md 的 kind */
-export type DocKind = 'characters' | 'world' | 'foreshadow' | 'style' | 'bank';
+/** 世界文档类型：6 类管理数据在磁盘 .docs/<类>/*.md 的 kind（人物关系为单例图边存储） */
+export type DocKind = 'characters' | 'world' | 'foreshadow' | 'style' | 'bank' | 'relations';
 
 /** 世界文档：fields 为 front-matter 结构化字段（除 id），body 为正文 */
 export interface DocRow {
@@ -77,6 +77,8 @@ export interface Character {
   profile: string;
   speaking_style: string;
   status: string;
+  /** true = 主要人物（图板主角强调） */
+  main: boolean;
 }
 
 export interface WorldSetting {
@@ -108,6 +110,7 @@ export interface CharacterInput {
   profile: string;
   speakingStyle: string;
   status: string;
+  main: boolean;
 }
 
 export interface WorldSettingInput {

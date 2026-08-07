@@ -38,6 +38,7 @@ const DOC_KINDS: Record<DocKind, DocKindDef> = {
       { key: 'profile', kind: 'string', default: '' },
       { key: 'speaking_style', kind: 'string', default: '' },
       { key: 'status', kind: 'string', default: '' },
+      { key: 'main', kind: 'string', default: '' }, // "1" = 主要人物，图板强调
     ],
   },
   world: {
@@ -79,24 +80,38 @@ const DOC_KINDS: Record<DocKind, DocKindDef> = {
       { key: 'tags', kind: 'string', default: '' },
     ],
   },
+  relations: {
+    kind: 'relations',
+    dir: '人物关系',
+    label: '人物关系',
+    fields: [
+      { key: 'edges', kind: 'string', default: '' }, // JSON 数组 [{a,b,label,note}]
+    ],
+  },
 };
 
-// 文件名锚定方式：true = 文件名即 id（伏笔/文风/素材库，免改名）；false = 按名称命名（人物卡/世界观，改名联动文件）
+// 文件名锚定方式：true = 文件名即 id（伏笔/文风/素材库/人物关系，免改名）；false = 按名称命名（人物卡/世界观，改名联动文件）
 const ID_NAMED: Record<DocKind, boolean> = {
   characters: false,
   world: false,
   foreshadow: true,
   style: true,
   bank: true,
+  relations: true,
 };
 
+// 旧 SQLite 表映射（仅迁移用）。relations 无旧表，值留空、迁移跳过。
 const TABLE_BY_KIND: Record<DocKind, string> = {
   characters: 'characters',
   world: 'world_settings',
   foreshadow: 'foreshadowing',
   style: 'style_profiles',
   bank: 'detail_bank',
+  relations: '',
 };
+
+// 有旧 SQLite 表、需从表迁移的 kind；新 kind（如 relations）不在其中
+const LEGACY_KINDS: DocKind[] = ['characters', 'world', 'foreshadow', 'style', 'bank'];
 
 // ---- 基础读写 ----
 
@@ -147,6 +162,8 @@ function docTitle(kind: DocKind, fields: DocRow['fields'], body: string, fileNam
       return '文风档案';
     case 'bank':
       return preview(body) || `素材 ${fileName}`;
+    case 'relations':
+      return '人物关系';
   }
 }
 
@@ -265,15 +282,25 @@ export function getDoc(novelId: number, kind: DocKind, id: number): DocRow | und
   return undefined;
 }
 
-/** 取文风单例；不存在返回 undefined（由 createDoc('style') 创建） */
-export function getStyleDoc(novelId: number): DocRow | undefined {
-  const dir = kindDir(novelId, 'style');
+/** 取单例文档（文风/人物关系）；不存在返回 undefined（由 createDoc 创建） */
+function getSingletonDoc(novelId: number, kind: DocKind): DocRow | undefined {
+  const dir = kindDir(novelId, kind);
   if (!dir || !fs.existsSync(dir)) return undefined;
   const file = fs
     .readdirSync(dir, { withFileTypes: true })
     .find((e) => e.isFile() && e.name.endsWith('.md'));
   if (!file) return undefined;
-  return readDocFile(novelId, 'style', path.join(dir, file.name));
+  return readDocFile(novelId, kind, path.join(dir, file.name));
+}
+
+/** 取文风单例；不存在返回 undefined（由 createDoc('style') 创建） */
+export function getStyleDoc(novelId: number): DocRow | undefined {
+  return getSingletonDoc(novelId, 'style');
+}
+
+/** 取人物关系单例；不存在返回 undefined */
+export function getRelationsDoc(novelId: number): DocRow | undefined {
+  return getSingletonDoc(novelId, 'relations');
 }
 
 /** 仅取某 kind 的文档列表 */
@@ -283,11 +310,11 @@ export function listKindDocs(novelId: number, kind: DocKind): DocRow[] {
 
 // ---- 写 ----
 
-/** 新建文档：发 id、写默认文件。style 为单例（已存在直接返回现有）；人物卡/世界观用 title 作 name/key */
+/** 新建文档：发 id、写默认文件。style/relations 为单例（已存在直接返回现有）；人物卡/世界观用 title 作 name/key */
 export function createDoc(novelId: number, kind: DocKind, title?: string): DocRow {
   const def = DOC_KINDS[kind];
-  if (kind === 'style') {
-    const existing = getStyleDoc(novelId);
+  if (kind === 'style' || kind === 'relations') {
+    const existing = getSingletonDoc(novelId, kind);
     if (existing) return existing;
   }
   const dir = kindDir(novelId, kind);
@@ -411,7 +438,8 @@ function migrateNovelDocs(novelId: number): void {
   // 人物卡目录存在即视为已迁移（迁移是整批的，任一 kind 已在盘上就不再动）
   if (fs.existsSync(path.join(root, DOC_KINDS.characters.dir))) return;
   fs.mkdirSync(root, { recursive: true });
-  for (const kind of Object.keys(DOC_KINDS) as DocKind[]) migrateKindTable(novelId, root, kind);
+  // 只迁有旧表的历史 kind；新 kind（relations）无旧表，跳过避免查不存在表
+  for (const kind of LEGACY_KINDS) migrateKindTable(novelId, root, kind);
   syncBankMirror(novelId); // 迁移后把素材库文件重灌成 detail_bank mirror
 }
 
