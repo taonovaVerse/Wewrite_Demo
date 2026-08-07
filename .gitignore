@@ -13,3 +13,6 @@ src-tauri/resources/
 
 # Local Claude Code settings (machine-specific)
 .claude/settings.local.json
+
+# Local implementation plan (not committed)
+plan.md
