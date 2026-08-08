@@ -11,7 +11,10 @@ export const AUTOCOMPLETE_SYSTEM = `你是小说写作的自动补全引擎。�
 2. 长度 10-40 字（一句以内），选择最自然、最可能的一种走向，不炫技。
 3. 严格贴合前文语感、节奏、人称与视角（见文风档案）。
 4. 当续写方向有明显分叉时，选择延续当前句子语义的最小补全。
-5. 杜绝 AI 腔与陈词滥调。禁用词：${DEFAULT_TABOO}。`;
+5. 杜绝 AI 腔与陈词滥调。禁用词：${DEFAULT_TABOO}。
+6. 逻辑一致性：不得凭空引入前文未出现的人物、物件或设定；拿不准就宁可不写，不可编造。
+7. 人物贴合：补全涉及在场人物时，其言行、语气必须符合该人物的身份与口癖（见「在场人物」）。
+8. 话题延续：延续当前句的主语与话题自然前进，不跳转、不总结、不升华。`;
 
 export const CONTINUE_SYSTEM = `你是一位资深中文小说写手，正在协助作者续写小说正文。
 
@@ -32,6 +35,17 @@ export interface CharacterCtx {
   profile: string;
   speaking_style: string;
   status: string;
+}
+
+function formatCharacters(characters: CharacterCtx[]): string {
+  return characters
+    .map(
+      (c) =>
+        `- ${c.name}：${c.profile || '—'}` +
+        (c.speaking_style ? `\n  口癖/说话习惯：${c.speaking_style}` : '') +
+        (c.status ? `\n  当前状态：${c.status}` : ''),
+    )
+    .join('\n');
 }
 
 export interface Scene {
@@ -123,6 +137,7 @@ export function formatDetailUser(data: DetailContext): string {
 export interface AutocompleteContext {
   style: { voice: string; taboo_words: string };
   scene?: Partial<Scene>;
+  characters: CharacterCtx[];
   before: string;
   after: string;
 }
@@ -133,6 +148,9 @@ export function formatAutocompleteUser(data: AutocompleteContext): string {
   const parts: string[] = [];
   parts.push(section('文风档案', styleLines.filter(Boolean).join('\n')));
   pushSceneSection(parts, data.scene);
+  if (data.characters.length > 0) {
+    parts.push(section('在场人物', formatCharacters(data.characters.slice(0, 4))));
+  }
   parts.push(section('前文（光标前）', data.before || '（空）'));
   parts.push(section('后文（光标后）', data.after || '（空）'));
   parts.push('## 补全光标处：');
@@ -151,19 +169,7 @@ export function formatContinueUser(data: ContinueContext): string {
   pushSceneSection(parts, data.scene);
 
   if (data.characters.length > 0) {
-    parts.push(
-      section(
-        '人物卡（当前场景相关）',
-        data.characters
-          .map(
-            (c) =>
-              `- ${c.name}：${c.profile || '—'}` +
-              (c.speaking_style ? `\n  口癖/说话习惯：${c.speaking_style}` : '') +
-              (c.status ? `\n  当前状态：${c.status}` : ''),
-          )
-          .join('\n'),
-      ),
-    );
+    parts.push(section('人物卡（当前场景相关）', formatCharacters(data.characters)));
   }
 
   if (data.settings.length > 0) {

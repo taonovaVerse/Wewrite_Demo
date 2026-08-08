@@ -109,12 +109,17 @@ export function assembleAutocomplete(
   textAfter: string,
 ): { system: string; user: string; cachePrefix: boolean } {
   const style = getStyle(chapter.novel_id);
+  const characters = getSceneCharacters(
+    chapter.novel_id,
+    parseSceneCharacterIds(chapter.scene_characters),
+  );
 
   return {
     system: AUTOCOMPLETE_SYSTEM,
     user: formatAutocompleteUser({
       style,
       scene: { location: chapter.location, time_frame: chapter.time_frame },
+      characters,
       before: textBefore,
       after: textAfter,
     }),
