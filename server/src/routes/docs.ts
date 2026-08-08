@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { listKindDocs, getDoc, createDoc, writeDoc, deleteDoc } from '../fs/docFs.js';
+import { listKindDocs, getDoc, createDoc, writeDoc, deleteDoc, DOC_KINDS } from '../fs/docFs.js';
 import { scheduleSnapshot, snapshotNow } from '../fs/versioning.js';
 import type { DocKind } from '../types.js';
 
@@ -8,7 +8,7 @@ import type { DocKind } from '../types.js';
 
 export const docsRouter = Router();
 
-const KINDS: DocKind[] = ['characters', 'world', 'foreshadow', 'style', 'bank', 'relations'];
+const KINDS = Object.keys(DOC_KINDS) as DocKind[];
 
 function parseKind(s: string): DocKind | undefined {
   return KINDS.find((k) => k === s);

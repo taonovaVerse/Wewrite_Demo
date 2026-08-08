@@ -1,6 +1,6 @@
 import { app, activeChapterId } from '../app';
 import { api, type Novel, type Chapter, type FileNode, type DocRow } from '../api';
-import { el, confirmDelete } from '../ui';
+import { el, confirmDelete, SVG_NS } from '../ui';
 import { ask } from '../quickInput';
 import { refresh } from '../sidebar';
 import {
@@ -87,14 +87,14 @@ function nodeRow(node: FileNode): HTMLElement {
 /** 树行类型图标（文件夹/文件），颜色随 CSS --muted */
 function treeIcon(type: 'folder' | 'file'): HTMLElement {
   const wrap = el('span', 'tree-icon');
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 16 16');
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
   svg.setAttribute('stroke-width', '1.3');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
-  const body = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const body = document.createElementNS(SVG_NS, 'path');
   body.setAttribute(
     'd',
     type === 'folder'
@@ -103,7 +103,7 @@ function treeIcon(type: 'folder' | 'file'): HTMLElement {
   );
   svg.appendChild(body);
   if (type === 'file') {
-    const fold = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const fold = document.createElementNS(SVG_NS, 'path');
     fold.setAttribute('d', 'M9.5 1.5V5H13');
     svg.appendChild(fold);
   }

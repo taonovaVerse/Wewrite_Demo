@@ -387,12 +387,8 @@ async function init(): Promise<void> {
       const data = (await res.json()) as { text?: string };
       return data.text ?? '';
     },
-    onTabsChange: () => {
-      renderTabs();
-    },
-    onActiveChange: () => {
-      renderStatusbar();
-    },
+    onTabsChange: renderTabs,
+    onActiveChange: renderStatusbar,
   });
 
   graphPanel.mount();

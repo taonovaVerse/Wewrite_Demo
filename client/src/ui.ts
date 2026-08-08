@@ -1,3 +1,6 @@
+/** SVG 元素命名空间（手写 SVG 图形共用） */
+export const SVG_NS = 'http://www.w3.org/2000/svg';
+
 export function el(tag: string, className?: string, text?: string): HTMLElement {
   const node = document.createElement(tag);
   if (className) node.className = className;

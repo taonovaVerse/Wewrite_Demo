@@ -669,8 +669,9 @@ body {
   flex-shrink: 0;
 }
 
-/* 历史视图：选中版本高亮 + 统一 diff 着色 */
-.history-selected {
+/* 历史视图 / 人物卡：选中项高亮（list-selected 语义通用） */
+.history-selected,
+.graph-selected {
   border-color: var(--accent);
   background: var(--bg-hover);
 }

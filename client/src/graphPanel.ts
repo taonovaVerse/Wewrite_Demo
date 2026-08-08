@@ -1,5 +1,6 @@
 // 主编辑区关系图板：纯手写 SVG + 力导向布局（零依赖）。
 // 只管画与交互，不碰数据来源——外部通过 setData 喂人物/边，回调通知选中/连线。
+import { SVG_NS } from './ui';
 
 export interface GraphEdge {
   a: number;
@@ -23,8 +24,6 @@ interface Callbacks {
   onEdgeSelect: ((index: number) => void) | null;
   onLink: ((a: number, b: number) => void) | null;
 }
-
-const SVG_NS = 'http://www.w3.org/2000/svg';
 
 let panel: HTMLDivElement | null = null;
 let svg: SVGSVGElement | null = null;
@@ -290,6 +289,11 @@ function selectNode(id: number | null): void {
     }
     return;
   }
+  // 同节点再次选中：图面无需重绘（回调仍需触发以更新侧边栏表单）
+  if (selectedNode === id && selectedEdge === null) {
+    if (id != null) cbs.onNodeSelect?.(id);
+    return;
+  }
   selectedNode = id;
   selectedEdge = null;
   render();
@@ -297,6 +301,10 @@ function selectNode(id: number | null): void {
 }
 
 function selectEdge(idx: number): void {
+  if (selectedEdge === idx && selectedNode === null) {
+    cbs.onEdgeSelect?.(idx);
+    return;
+  }
   selectedEdge = idx;
   selectedNode = null;
   render();
@@ -439,26 +447,30 @@ function refresh(): void {
 function selectNodeProgrammatic(id: number | null): void {
   linkMode = false;
   linkFirst = null;
+  if (selectedNode === id && selectedEdge === null) return;
   selectedNode = id;
   selectedEdge = null;
   render();
 }
 
 function clearSelection(): void {
+  if (selectedNode === null && selectedEdge === null) return;
   selectedNode = null;
   selectedEdge = null;
   render();
 }
 
 function setLinkMode(on: boolean): void {
-  linkMode = on;
   linkFirst = null;
+  if (linkMode === on) return;
+  linkMode = on;
   render();
 }
 
 function selectEdgeProgrammatic(idx: number | null): void {
   linkMode = false;
   linkFirst = null;
+  if (selectedEdge === idx && selectedNode === null) return;
   selectedEdge = idx;
   selectedNode = null;
   render();

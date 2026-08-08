@@ -139,7 +139,7 @@ function renderList(c: HTMLElement): void {
   for (const ch of visible) {
     const row = el(
       'div',
-      'view-item' + (graphPanel.selectedNodeId === ch.id ? ' history-selected' : ''),
+      'view-item' + (graphPanel.selectedNodeId === ch.id ? ' graph-selected' : ''),
     );
     const info = el('div', 'view-item-info');
     info.appendChild(

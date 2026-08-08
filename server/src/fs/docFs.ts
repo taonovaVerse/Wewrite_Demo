@@ -28,7 +28,7 @@ interface DocKindDef {
   fields: DocField[];
 }
 
-const DOC_KINDS: Record<DocKind, DocKindDef> = {
+export const DOC_KINDS: Record<DocKind, DocKindDef> = {
   characters: {
     kind: 'characters',
     dir: '人物卡',

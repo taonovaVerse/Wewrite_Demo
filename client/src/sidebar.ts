@@ -31,10 +31,6 @@ const VIEW_TITLES: Record<ViewId, string> = {
 
 let active: ViewId = 'explorer';
 
-export function getActiveViewId(): ViewId {
-  return active;
-}
-
 export function setActiveView(id: ViewId): void {
   active = id;
   document.querySelectorAll('#activitybar .activity-item').forEach((node) => {
