@@ -204,7 +204,8 @@ export class TabManager {
   async flushActive(): Promise<void> {
     const tab = this.active;
     if (!tab || !tab.dirty) return;
-    this.handle.cancelSuggestion();
+    // 注意：自动保存不能取消在途补全请求——DeepSeek 响应慢于 800ms 防抖，
+    // 取消会中止幽灵文本。真正需要取消的是切页/关页（switchTo/close 已处理）。
     const doc = this.handle.view.state.doc.toString();
     const state = this.handle.view.state;
     tab.dirty = false;
