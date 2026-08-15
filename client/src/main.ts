@@ -10,6 +10,8 @@ import { ask, isQuickInputOpen } from './quickInput';
 import { isPickOpen, openPalette, openPick, registerCommand, setupPalette } from './commands';
 import { setAiStatus, refreshEl as refreshStatusEl } from './status';
 import { triggerDetail } from './detail';
+import { consumeSSE } from './sse';
+import { focusAssistantInput } from './views/assistant';
 import {
   reloadNovels,
   selectNovel,
@@ -20,6 +22,7 @@ import {
   deleteNovel,
 } from './novels';
 import { el, confirmDelete } from './ui';
+import { cancelInlineRewrite } from './rewrite';
 import './styles.css';
 
 // ---------- 渲染：标签页 ----------
@@ -139,40 +142,22 @@ async function continueWriting(): Promise<void> {
       signal: ctrl.signal,
     });
     if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const parts = buffer.split('\n\n');
-      buffer = parts.pop() ?? '';
-      for (const part of parts) {
-        const line = part.replace(/^data:\s*/, '').trim();
-        if (!line) continue;
-        let evt: { type: string; text?: string; message?: string };
-        try {
-          evt = JSON.parse(line);
-        } catch {
-          continue;
+    await consumeSSE(res.body, (evt) => {
+      if (evt.type === 'token' && evt.text) {
+        if (app.tabs?.activeId !== chapterId) {
+          ctrl.abort();
+          return false;
         }
-        if (evt.type === 'token' && evt.text) {
-          if (app.tabs?.activeId !== chapterId) {
-            ctrl.abort();
-            break;
-          }
-          fullText += evt.text;
-          view.dispatch({ changes: { from: pos, insert: evt.text } });
-          pos += evt.text.length;
-        } else if (evt.type === 'warning' && !warned) {
-          warned = true;
-          setAiStatus('⚠ AI 提示可能偏离大纲，请审阅', 'warn');
-        } else if (evt.type === 'error') {
-          setAiStatus('✗ ' + (evt.message ?? '未知错误'), 'error');
-        }
+        fullText += evt.text;
+        view.dispatch({ changes: { from: pos, insert: evt.text } });
+        pos += evt.text.length;
+      } else if (evt.type === 'warning' && !warned) {
+        warned = true;
+        setAiStatus('⚠ AI 提示可能偏离大纲，请审阅', 'warn');
+      } else if (evt.type === 'error') {
+        setAiStatus('✗ ' + (evt.message ?? '未知错误'), 'error');
       }
-    }
+    });
 
     if (app.tabs?.activeId === chapterId) {
       const inserted = view.state.sliceDoc(startPos, pos);
@@ -283,6 +268,12 @@ function quickOpenChapter(): void {
   );
 }
 
+/** Ctrl+I / 命令面板：切到 AI 助手视图并聚焦输入框（消息在 Enter 后才发起，AI 默认不介入） */
+function triggerAssistant(): void {
+  setActiveView('assistant');
+  focusAssistantInput();
+}
+
 // ---------- 命令注册 ----------
 
 function registerCommands(): void {
@@ -296,6 +287,7 @@ function registerCommands(): void {
   registerCommand({ id: 'file.save', label: '保存', category: '文件', run: saveActive });
   registerCommand({ id: 'ai.continue', label: '续写一段', category: 'AI', run: () => void toggleContinue() });
   registerCommand({ id: 'ai.detail', label: '生成场景细节', category: 'AI', run: () => void triggerDetail() });
+  registerCommand({ id: 'ai.assistant', label: '打开 AI 助手', category: 'AI', run: () => void triggerAssistant() });
 
   const viewCmds: [ViewId, string][] = [
     ['explorer', '资源管理器'],
@@ -305,6 +297,7 @@ function registerCommands(): void {
     ['style', '文风'],
     ['blueprint', '章节细纲'],
     ['history', '历史记录'],
+    ['assistant', 'AI 助手'],
   ];
   for (const [vid, label] of viewCmds) {
     registerCommand({
@@ -345,8 +338,13 @@ window.addEventListener('keydown', (e) => {
   } else if (mod && e.shiftKey && (e.key === 'B' || e.key === 'b')) {
     e.preventDefault();
     setActiveView('blueprint');
+  } else if (mod && !e.shiftKey && (e.key === 'i' || e.key === 'I')) {
+    // Ctrl+I 呼出 AI 助手；!shiftKey 保 Ctrl+Shift+I 给 DevTools
+    e.preventDefault();
+    triggerAssistant();
   } else if (e.key === 'Escape') {
     if (app.generating) cancelGeneration();
+    else cancelInlineRewrite(app.editor?.view);
   }
 });
 

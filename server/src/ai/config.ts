@@ -18,6 +18,7 @@ const defaultConfig: AiConfig = {
     autocomplete: 'deepseek',
     detail: 'anthropic',
     continue: 'anthropic',
+    assistant: 'anthropic',
   },
 };
 
@@ -43,7 +44,8 @@ export function loadConfig(): AiConfig {
 
 export function resolveProvider(layer: keyof AiConfig['routing']): ProviderConfigWithName {
   const cfg = loadConfig();
-  const name = cfg.routing[layer];
+  // assistant 未在 config.json 配置时回退到 continue 的 provider，保证零配置改动可用
+  const name = cfg.routing[layer] ?? cfg.routing.continue;
   const provider = cfg.providers[name];
   if (!provider) {
     throw new Error(`路由未找到 provider: ${name}（layer=${layer}）`);

@@ -5,6 +5,7 @@ import { foreshadowView } from './views/foreshadow';
 import { styleView } from './views/style';
 import { blueprintView } from './views/blueprint';
 import { historyView } from './views/history';
+import { assistantView } from './views/assistant';
 import type { ViewId, SidebarView } from './views/types';
 import { el } from './ui';
 import { graphPanel } from './graphPanel';
@@ -17,6 +18,7 @@ const views: Record<ViewId, SidebarView> = {
   style: styleView,
   blueprint: blueprintView,
   history: historyView,
+  assistant: assistantView,
 };
 
 const VIEW_TITLES: Record<ViewId, string> = {
@@ -27,6 +29,7 @@ const VIEW_TITLES: Record<ViewId, string> = {
   style: '文风',
   blueprint: '章节细纲',
   history: '历史',
+  assistant: 'AI 助手',
 };
 
 let active: ViewId = 'explorer';

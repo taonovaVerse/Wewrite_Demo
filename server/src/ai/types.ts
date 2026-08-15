@@ -1,4 +1,4 @@
-export type Layer = 'autocomplete' | 'detail' | 'continue';
+export type Layer = 'autocomplete' | 'detail' | 'continue' | 'assistant';
 
 export interface ProviderConfig {
   apiKey: string;

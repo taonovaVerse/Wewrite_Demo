@@ -2,18 +2,24 @@ import { getChapterById } from '../fs/novelFs.js';
 import { getStyleDoc, listKindDocs } from '../fs/docFs.js';
 import { parseSceneCharacterIds, type ChapterRow, type DocRow } from '../types.js';
 import {
+  ASSISTANT_SYSTEM,
   AUTOCOMPLETE_SYSTEM,
   CONTINUE_SYSTEM,
   DETAIL_SYSTEM,
+  REWRITE_SYSTEM,
+  formatAssistantUser,
   formatAutocompleteUser,
   formatContinueUser,
   formatDetailUser,
+  formatMetrics,
+  type AssistantContext,
   type ContinueContext,
   type DetailContext,
   type Scene,
   type CharacterCtx,
 } from './prompts.js';
 import { searchDetailBank } from './detailBank.js';
+import { analyzeChapters } from '../style/analyzer.js';
 
 // 世界文档（人物卡/世界观/伏笔/文风）已迁到 .docs 文件，AI 上下文统一从磁盘读，不再查 SQLite 表。
 
@@ -147,5 +153,55 @@ export function assembleDetail(
     user: formatDetailUser(ctx),
     cachePrefix: true,
     sources: ctx.examples,
+  };
+}
+
+/** AI 助手：多轮对话（全书上下文 + 全部人物卡 + 当前章文风指标 + 正文）与改写写回 */
+export function assembleAssistant(
+  chapter: ChapterRow,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  mode: 'ask' | 'rewrite',
+  originalText?: string,
+): { system: string; user: string; cachePrefix: boolean } {
+  const style = getStyle(chapter.novel_id);
+  const characters = getSceneCharacters(chapter.novel_id, []); // 全书范围：全部人物卡，非场景过滤
+  const settings = getSettings(chapter.novel_id);
+  const foreshadowing = getUnresolvedForeshadow(chapter.novel_id);
+  const { metrics } = analyzeChapters([chapter]); // 单章扫描，便宜
+  const MAX = 8000;
+  const chapterText =
+    chapter.content.length > MAX
+      ? chapter.content.slice(0, MAX) + '\n……（正文过长，以上为节选）'
+      : chapter.content;
+
+  // 多轮历史：末 12 轮、每轮 ≤2000 字（不含当前轮；当前轮由 mode/question/originalText 表达）
+  const history = messages
+    .slice(0, -1)
+    .slice(-12)
+    .map((m) => ({
+      role: m.role,
+      content: m.content.length > 2000 ? m.content.slice(0, 2000) + '……（已截断）' : m.content,
+    }));
+  const question = messages[messages.length - 1]?.content ?? '';
+
+  const ctx: AssistantContext = {
+    style,
+    scene: extractScene(chapter),
+    characters,
+    settings,
+    foreshadowing,
+    blueprint: chapter.blueprint,
+    metrics: formatMetrics(metrics),
+    chapterText,
+    history,
+    mode,
+    question,
+    originalText,
+  };
+
+  return {
+    system: mode === 'rewrite' ? REWRITE_SYSTEM : ASSISTANT_SYSTEM,
+    user: formatAssistantUser(ctx),
+    cachePrefix: true,
   };
 }

@@ -663,6 +663,126 @@ body {
   word-break: break-word;
 }
 
+.assistant-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.assistant-user {
+  align-self: flex-end;
+  max-width: 85%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--fg);
+  background: var(--accent);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.assistant-hint {
+  opacity: 0.9;
+}
+
+.assistant-error {
+  color: var(--danger);
+}
+
+/* ---- 内联改写（对标 VSCode Rewrite） ---- */
+.rw-toolbar {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 9px;
+  border-radius: 11px;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+.rw-toolbar:hover {
+  color: var(--fg);
+  border-color: var(--accent-dim);
+}
+
+.rw-panel {
+  max-width: 720px;
+  margin: 8px 0 14px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.rw-prompt-row {
+  display: flex;
+  gap: 8px;
+}
+
+.rw-prompt {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+.rw-prompt:focus {
+  outline: none;
+  border-color: var(--accent-dim);
+}
+
+.rw-draft {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 14px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--fg);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.rw-draft:empty {
+  display: none;
+}
+
+.rw-draft-done {
+  border-color: var(--accent-dim);
+}
+
+.rw-status {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.rw-status:empty {
+  display: none;
+}
+
+.rw-status-error {
+  color: var(--danger);
+}
+
+.rw-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+
 .view-item-actions {
   display: flex;
   gap: 6px;

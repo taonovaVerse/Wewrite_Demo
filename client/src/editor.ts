@@ -22,6 +22,7 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown } from '@codemirror/lang-markdown';
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { slsLinter } from './diagnostics';
+import { inlineRewrite, cancelInlineRewrite } from './rewrite';
 
 interface Suggestion {
   from: number;
@@ -265,7 +266,7 @@ export function createEditor(
       },
     }),
   ];
-  // 章节态额外扩展：幽灵补全 + SLS lint + 幽灵键位
+  // 章节态额外扩展：幽灵补全 + SLS lint + 幽灵键位 + 内联改写
   const chapterExtensions: Extension[] = [
     ghostField,
     showGhost,
@@ -278,6 +279,7 @@ export function createEditor(
         { key: 'Escape', run: dismiss },
       ]),
     ),
+    inlineRewrite,
   ];
 
   const state = createState(doc, readOnly);
@@ -299,6 +301,7 @@ export function createEditor(
       if (view.state.field(ghostField, false)) {
         view.dispatch({ effects: setGhostEffect.of(null), annotations: noReschedule.of(true) });
       }
+      cancelInlineRewrite(view);
     },
     destroy: () => view.destroy(),
   };

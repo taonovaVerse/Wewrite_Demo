@@ -1,5 +1,11 @@
 import { Router, type Response } from 'express';
-import { getChapter, assembleContinue, assembleAutocomplete, assembleDetail } from '../ai/context.js';
+import {
+  getChapter,
+  assembleContinue,
+  assembleAutocomplete,
+  assembleDetail,
+  assembleAssistant,
+} from '../ai/context.js';
 import { streamByLayer } from '../ai/router.js';
 
 export const aiRouter = Router();
@@ -122,6 +128,73 @@ aiRouter.post('/continue', (req, res) => {
         }
         // 一段即止：正文出现空行（段落分隔）即收尾，防止无限续写
         if (paragraphBody(acc).replace(/^\s+/, '').includes('\n\n')) break;
+      }
+      sse(res, { type: 'done' });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        sse(res, { type: 'done' });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        sse(res, { type: 'error', message });
+      }
+    } finally {
+      res.end();
+    }
+  })();
+});
+
+aiRouter.post('/assistant', (req, res) => {
+  const chapterId = Number(req.body?.chapterId);
+  const chapter = getChapter(chapterId);
+  if (!chapter) {
+    res.status(404).json({ error: '章节不存在' });
+    return;
+  }
+
+  const rawMode = req.body?.mode;
+  const mode: 'ask' | 'rewrite' = rawMode === undefined ? 'ask' : rawMode;
+  if (mode !== 'ask' && mode !== 'rewrite') {
+    res.status(400).json({ error: 'mode 不合法' });
+    return;
+  }
+
+  const rawMessages = req.body?.messages;
+  if (!Array.isArray(rawMessages) || rawMessages.length === 0) {
+    res.status(400).json({ error: '缺少消息' });
+    return;
+  }
+  const raw = rawMessages.map((m) => ({
+    role: String(m?.role),
+    content: String(m?.content ?? ''),
+  }));
+  if (raw.some((m) => (m.role !== 'user' && m.role !== 'assistant') || !m.content.trim())) {
+    res.status(400).json({ error: '消息格式不合法' });
+    return;
+  }
+  // 校验后 role 必为 user/assistant，content 非空
+  const messages = raw as { role: 'user' | 'assistant'; content: string }[];
+
+  const originalText = mode === 'rewrite' ? String(req.body?.rewrite?.originalText ?? '').trim() : '';
+  if (mode === 'rewrite' && !originalText) {
+    res.status(400).json({ error: '缺少原文' });
+    return;
+  }
+
+  const { system, user, cachePrefix } = assembleAssistant(chapter, messages, mode, originalText);
+  setSSE(res);
+
+  const controller = new AbortController();
+  res.on('close', () => controller.abort());
+
+  void (async () => {
+    try {
+      for await (const token of streamByLayer('assistant', {
+        system,
+        user,
+        cachePrefix,
+        signal: controller.signal,
+      })) {
+        sse(res, { type: 'token', text: token });
       }
       sse(res, { type: 'done' });
     } catch (err) {
