@@ -4,10 +4,18 @@ import { parseSceneCharacterIds, type ChapterRow } from '../types.js';
 import { tabooChecker } from './taboo.js';
 import { characterSceneChecker } from './characterScene.js';
 import { foreshadowChecker } from './foreshadow.js';
+import { sceneConflictChecker } from './sceneConflict.js';
+import { characterBehaviorChecker } from './characterBehavior.js';
 import type { SlsChecker, SlsContext, SlsDiagnostic } from './types.js';
 
 // 已注册的检查器。扩展 SLS：新建检查器文件，实现 SlsChecker 接口，加到数组即可。
-const checkers: SlsChecker[] = [tabooChecker, characterSceneChecker, foreshadowChecker];
+const checkers: SlsChecker[] = [
+  tabooChecker,
+  characterSceneChecker,
+  foreshadowChecker,
+  sceneConflictChecker,
+  characterBehaviorChecker,
+];
 
 // 回响检索最多回看最近几章，控制成本
 const PRIOR_CHAPTER_LIMIT = 8;
@@ -21,9 +29,23 @@ function buildSlsContext(chapter: ChapterRow): SlsContext {
   // 前文 = 按深度优先树序位于当前章节之前的章节；回响只取每章开头一段（欠采样，少提示比多噪音安全）
   const all = listChaptersInOrder(chapter.novel_id);
   const idx = all.findIndex((c) => c.id === chapter.id);
-  const priorChapters = (idx === -1 ? all : all.slice(0, idx))
+  const prior = idx === -1 ? all : all.slice(0, idx);
+  const priorChapters = prior
     .slice(-PRIOR_CHAPTER_LIMIT)
     .map((c) => c.content.slice(0, 1000));
+  // 场景冲突基线：全部前章去重后的 location（seq 用 DFS 全局序号，order_idx 是每文件夹重置的）
+  const seenLoc = new Set<string>();
+  const priorLocations = prior
+    .map((c, i) => ({
+      seq: i + 1,
+      title: c.title,
+      location: c.location?.trim() ?? '',
+    }))
+    .filter((x) => {
+      if (!x.location || seenLoc.has(x.location)) return false;
+      seenLoc.add(x.location);
+      return true;
+    });
   const foreshadowNotes = listKindDocs(chapter.novel_id, 'foreshadow')
     .filter((d) => d.fields.resolved_chapter == null)
     .map((d) => String(d.fields.note ?? ''));
@@ -33,6 +55,7 @@ function buildSlsContext(chapter: ChapterRow): SlsContext {
     sceneCharacterIds: parseSceneCharacterIds(chapter.scene_characters),
     priorChapters,
     foreshadowNotes,
+    priorLocations,
   };
 }
 

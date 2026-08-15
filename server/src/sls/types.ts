@@ -28,6 +28,8 @@ export interface SlsContext {
   priorChapters: string[];
   /** 未完结的伏笔条目（resolved_chapter 为空） */
   foreshadowNotes: string[];
+  /** 更早章节去重后的场景 location 清单（seq 为 DFS 全局序号，去重保留最早一章） */
+  priorLocations: { seq: number; title: string; location: string }[];
 }
 
 /** 检查器契约：入参 (正文, 上下文)，返回若干诊断 */
