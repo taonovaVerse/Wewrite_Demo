@@ -2,6 +2,8 @@ export interface SSEEvent {
   type: string;
   text?: string;
   message?: string;
+  /** assistant 流式开始前的一次性「检索资料」事件 */
+  items?: { kind: 'chapter' | 'bank'; title: string; excerpt: string }[];
 }
 
 /**

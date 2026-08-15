@@ -1,24 +1,27 @@
-import { getChapterById } from '../fs/novelFs.js';
+import { getChapterById, listChaptersInOrder } from '../fs/novelFs.js';
 import { getStyleDoc, listKindDocs } from '../fs/docFs.js';
 import { parseSceneCharacterIds, type ChapterRow, type DocRow } from '../types.js';
 import {
-  ASSISTANT_SYSTEM,
+  ASSISTANT_BOOK_SYSTEM,
   AUTOCOMPLETE_SYSTEM,
   CONTINUE_SYSTEM,
   DETAIL_SYSTEM,
   REWRITE_SYSTEM,
   formatAssistantUser,
   formatAutocompleteUser,
+  formatBookAskUser,
   formatContinueUser,
   formatDetailUser,
   formatMetrics,
   type AssistantContext,
+  type BookAskContext,
   type ContinueContext,
   type DetailContext,
   type Scene,
   type CharacterCtx,
 } from './prompts.js';
 import { searchDetailBank } from './detailBank.js';
+import { retrieveBookSources, type BookSource } from './retrieval.js';
 import { analyzeChapters } from '../style/analyzer.js';
 
 // 世界文档（人物卡/世界观/伏笔/文风）已迁到 .docs 文件，AI 上下文统一从磁盘读，不再查 SQLite 表。
@@ -156,33 +159,34 @@ export function assembleDetail(
   };
 }
 
-/** AI 助手：多轮对话（全书上下文 + 全部人物卡 + 当前章文风指标 + 正文）与改写写回 */
-export function assembleAssistant(
-  chapter: ChapterRow,
-  messages: { role: 'user' | 'assistant'; content: string }[],
-  mode: 'ask' | 'rewrite',
-  originalText?: string,
-): { system: string; user: string; cachePrefix: boolean } {
-  const style = getStyle(chapter.novel_id);
-  const characters = getSceneCharacters(chapter.novel_id, []); // 全书范围：全部人物卡，非场景过滤
-  const settings = getSettings(chapter.novel_id);
-  const foreshadowing = getUnresolvedForeshadow(chapter.novel_id);
-  const { metrics } = analyzeChapters([chapter]); // 单章扫描，便宜
-  const MAX = 8000;
-  const chapterText =
-    chapter.content.length > MAX
-      ? chapter.content.slice(0, MAX) + '\n……（正文过长，以上为节选）'
-      : chapter.content;
+function truncateChapter(content: string, max = 8000): string {
+  return content.length > max ? content.slice(0, max) + '\n……（正文过长，以上为节选）' : content;
+}
 
-  // 多轮历史：末 12 轮、每轮 ≤2000 字（不含当前轮；当前轮由 mode/question/originalText 表达）
-  const history = messages
+/** 多轮历史：末 12 轮、每轮 ≤2000 字（不含当前轮；当前轮由 question/originalText 表达） */
+function trimHistory(
+  messages: { role: 'user' | 'assistant'; content: string }[],
+): { role: 'user' | 'assistant'; content: string }[] {
+  return messages
     .slice(0, -1)
     .slice(-12)
     .map((m) => ({
       role: m.role,
       content: m.content.length > 2000 ? m.content.slice(0, 2000) + '……（已截断）' : m.content,
     }));
-  const question = messages[messages.length - 1]?.content ?? '';
+}
+
+/** 改写写回：选中段落 + 全书人物卡 + 当前章指标与正文，输出替换稿 */
+export function assembleAssistant(
+  chapter: ChapterRow,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  originalText: string,
+): { system: string; user: string; cachePrefix: boolean } {
+  const style = getStyle(chapter.novel_id);
+  const characters = getSceneCharacters(chapter.novel_id, []); // 全书范围：全部人物卡，非场景过滤
+  const settings = getSettings(chapter.novel_id);
+  const foreshadowing = getUnresolvedForeshadow(chapter.novel_id);
+  const { metrics } = analyzeChapters([chapter]); // 单章扫描，便宜
 
   const ctx: AssistantContext = {
     style,
@@ -192,16 +196,59 @@ export function assembleAssistant(
     foreshadowing,
     blueprint: chapter.blueprint,
     metrics: formatMetrics(metrics),
-    chapterText,
-    history,
-    mode,
-    question,
+    chapterText: truncateChapter(chapter.content),
+    history: trimHistory(messages),
+    question: messages[messages.length - 1]?.content ?? '',
     originalText,
   };
 
-  return {
-    system: mode === 'rewrite' ? REWRITE_SYSTEM : ASSISTANT_SYSTEM,
-    user: formatAssistantUser(ctx),
-    cachePrefix: true,
+  return { system: REWRITE_SYSTEM, user: formatAssistantUser(ctx), cachePrefix: true };
+}
+
+/** 全书助手：全书固定件 + 章节速览 + 每轮自动检索（正文+素材库）+ 可选当前章节 */
+export function assembleBookAsk(
+  novelId: number,
+  messages: { role: 'user' | 'assistant'; content: string }[],
+  chapter?: ChapterRow,
+): { system: string; user: string; cachePrefix: boolean; sources: BookSource[] } {
+  const style = getStyle(novelId);
+  const characters = getSceneCharacters(novelId, []); // 全书：全部人物卡，非场景过滤
+  const settings = getSettings(novelId);
+  const foreshadowing = getUnresolvedForeshadow(novelId);
+  const chapters = listChaptersInOrder(novelId); // 一次读取，速览与检索共用
+
+  const overview = chapters
+    .slice(0, 30)
+    .map((c) => `- ${c.title || `第${c.order_idx}章`}：${firstLine(c.content)}`)
+    .join('\n');
+
+  const question = messages[messages.length - 1]?.content ?? '';
+  const sources = retrieveBookSources(novelId, question, chapters);
+
+  const ctx: BookAskContext = {
+    style,
+    characters,
+    settings,
+    foreshadowing,
+    chapterOverview: overview,
+    sources,
+    chapterText: chapter ? truncateChapter(chapter.content) : undefined,
+    history: trimHistory(messages),
+    question,
   };
+
+  return {
+    system: ASSISTANT_BOOK_SYSTEM,
+    user: formatBookAskUser(ctx),
+    cachePrefix: true,
+    sources,
+  };
+}
+
+function firstLine(content: string): string {
+  const line = content
+    .split('\n')
+    .map((l) => l.trim())
+    .find(Boolean);
+  return line ? line.slice(0, 40) : '（空章节）';
 }

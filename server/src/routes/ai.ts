@@ -5,8 +5,11 @@ import {
   assembleAutocomplete,
   assembleDetail,
   assembleAssistant,
+  assembleBookAsk,
 } from '../ai/context.js';
 import { streamByLayer } from '../ai/router.js';
+import type { Layer } from '../ai/types.js';
+import { novelById } from '../fs/registry.js';
 
 export const aiRouter = Router();
 
@@ -19,6 +22,33 @@ function setSSE(res: Response): void {
 
 function sse(res: Response, data: unknown): void {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
+}
+
+/** 以 SSE 流式输出某一 AI 层的 token 序列；客户端断开发 done，异常发 error，结束后收尾 */
+function streamSSE(
+  res: Response,
+  layer: Layer,
+  req: { system: string; user: string; cachePrefix: boolean },
+): void {
+  const controller = new AbortController();
+  res.on('close', () => controller.abort());
+  void (async () => {
+    try {
+      for await (const token of streamByLayer(layer, { ...req, signal: controller.signal })) {
+        sse(res, { type: 'token', text: token });
+      }
+      sse(res, { type: 'done' });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        sse(res, { type: 'done' });
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        sse(res, { type: 'error', message });
+      }
+    } finally {
+      res.end();
+    }
+  })();
 }
 
 /** 取【偏离预警】段之后的正文；无预警时返回全文。用于「一段即止」判定 */
@@ -144,13 +174,6 @@ aiRouter.post('/continue', (req, res) => {
 });
 
 aiRouter.post('/assistant', (req, res) => {
-  const chapterId = Number(req.body?.chapterId);
-  const chapter = getChapter(chapterId);
-  if (!chapter) {
-    res.status(404).json({ error: '章节不存在' });
-    return;
-  }
-
   const rawMode = req.body?.mode;
   const mode: 'ask' | 'rewrite' = rawMode === undefined ? 'ask' : rawMode;
   if (mode !== 'ask' && mode !== 'rewrite') {
@@ -174,38 +197,41 @@ aiRouter.post('/assistant', (req, res) => {
   // 校验后 role 必为 user/assistant，content 非空
   const messages = raw as { role: 'user' | 'assistant'; content: string }[];
 
-  const originalText = mode === 'rewrite' ? String(req.body?.rewrite?.originalText ?? '').trim() : '';
-  if (mode === 'rewrite' && !originalText) {
-    res.status(400).json({ error: '缺少原文' });
+  if (mode === 'rewrite') {
+    const chapterId = Number(req.body?.chapterId);
+    const chapter = getChapter(chapterId);
+    if (!chapter) {
+      res.status(404).json({ error: '章节不存在' });
+      return;
+    }
+    const originalText = String(req.body?.rewrite?.originalText ?? '').trim();
+    if (!originalText) {
+      res.status(400).json({ error: '缺少原文' });
+      return;
+    }
+    const { system, user, cachePrefix } = assembleAssistant(chapter, messages, originalText);
+    setSSE(res);
+    streamSSE(res, 'assistant', { system, user, cachePrefix });
     return;
   }
 
-  const { system, user, cachePrefix } = assembleAssistant(chapter, messages, mode, originalText);
-  setSSE(res);
-
-  const controller = new AbortController();
-  res.on('close', () => controller.abort());
-
-  void (async () => {
-    try {
-      for await (const token of streamByLayer('assistant', {
-        system,
-        user,
-        cachePrefix,
-        signal: controller.signal,
-      })) {
-        sse(res, { type: 'token', text: token });
-      }
-      sse(res, { type: 'done' });
-    } catch (err) {
-      if (controller.signal.aborted) {
-        sse(res, { type: 'done' });
-      } else {
-        const message = err instanceof Error ? err.message : String(err);
-        sse(res, { type: 'error', message });
-      }
-    } finally {
-      res.end();
+  // ask：全书助手（novelId 必需，chapterId 可选用于注入「当前章节」）
+  const novelId = Number(req.body?.novelId);
+  if (!novelId || !novelById(novelId)) {
+    res.status(400).json({ error: '小说不存在' });
+    return;
+  }
+  let chapter;
+  if (req.body?.chapterId != null) {
+    chapter = getChapter(Number(req.body.chapterId));
+    if (!chapter) {
+      res.status(404).json({ error: '章节不存在' });
+      return;
     }
-  })();
+  }
+
+  const { system, user, cachePrefix, sources } = assembleBookAsk(novelId, messages, chapter);
+  setSSE(res);
+  sse(res, { type: 'sources', items: sources });
+  streamSSE(res, 'assistant', { system, user, cachePrefix });
 });

@@ -689,6 +689,39 @@ body {
   color: var(--danger);
 }
 
+.assistant-sources {
+  align-self: stretch;
+  margin-bottom: 6px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--accent-dim);
+  background: var(--bg-soft);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.assistant-sources summary {
+  cursor: pointer;
+  color: var(--fg);
+  user-select: none;
+}
+
+.assistant-source {
+  margin-top: 6px;
+}
+
+.assistant-source-title {
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 2px;
+}
+
+.assistant-source-excerpt {
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.85;
+}
+
 /* ---- 内联改写（对标 VSCode Rewrite） ---- */
 .rw-toolbar {
   display: inline-block;

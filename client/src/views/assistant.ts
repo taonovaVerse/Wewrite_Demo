@@ -1,7 +1,7 @@
-import { app, activeChapter } from '../app';
+import { app, activeChapterId } from '../app';
 import { apiUrl } from '../apiBase';
 import { el, field, actionBtn, val } from '../ui';
-import { consumeSSE } from '../sse';
+import { consumeSSE, type SSEEvent } from '../sse';
 import type { SidebarView } from './types';
 
 const inputId = 'assistant-input';
@@ -12,10 +12,16 @@ interface Msg {
   content: string;
 }
 
-// 模块级状态：当前流式请求控制器 + 对话线程（跨重渲染保留）+ 线程锚定章节
+interface SourceItem {
+  kind: 'chapter' | 'bank';
+  title: string;
+  excerpt: string;
+}
+
+// 模块级状态：当前流式请求控制器 + 对话线程（跨重渲染保留）+ 线程锚定小说（切换章节不清空）
 let ctrl: AbortController | null = null;
 let messages: Msg[] = [];
-let threadChapterId: number | null = null;
+let threadNovelId: number | null = null;
 
 function flashHint(text: string): void {
   const thread = document.getElementById(threadId);
@@ -28,25 +34,29 @@ async function render(c: HTMLElement): Promise<void> {
   ctrl?.abort();
   c.innerHTML = '';
   const wrap = el('div', 'view-section');
-  const chapter = activeChapter();
-  if (!chapter) {
-    wrap.appendChild(el('div', 'view-hint', '先在资源管理器中打开一个章节，再与 AI 助手对话。'));
+  const novel = app.currentNovel;
+  if (!novel) {
+    wrap.appendChild(el('div', 'view-hint', '先在资源管理器中打开一部小说，再与 AI 助手对话。'));
     c.appendChild(wrap);
     return;
   }
 
   let resetHint = false;
-  if (threadChapterId !== chapter.id) {
+  if (threadNovelId !== novel.id) {
     messages = [];
-    threadChapterId = chapter.id;
+    threadNovelId = novel.id;
     resetHint = true;
   }
 
   wrap.appendChild(
-    el('div', 'view-hint', `当前章节：${chapter.title}。连续提问可多轮追问，助手会参考全书设定回答。`),
+    el(
+      'div',
+      'view-hint',
+      `当前小说：${novel.title}。每轮自动检索全书正文与素材库，可跨章节提问。`,
+    ),
   );
   if (resetHint) {
-    wrap.appendChild(el('div', 'view-hint', '已切换章节，会话已重置。'));
+    wrap.appendChild(el('div', 'view-hint', '已切换小说，会话已重置。'));
   }
 
   const thread = el('div', 'assistant-thread');
@@ -89,8 +99,8 @@ export function focusAssistantInput(): void {
 }
 
 function runAssistant(): void {
-  const chapter = activeChapter();
-  if (!chapter) return;
+  const novel = app.currentNovel;
+  if (!novel) return;
   const question = val(inputId);
   if (!question) {
     flashHint('请输入消息。');
@@ -99,11 +109,27 @@ function runAssistant(): void {
   const inputNode = document.getElementById(inputId) as HTMLInputElement | null;
   if (inputNode) inputNode.value = '';
 
-  void streamIntoView(chapter.id, question);
+  void streamIntoView(novel.id, question);
 }
 
-/** 流式拉取 /api/ai/assistant（mode=ask），把 token 追加进线程；完成后存回消息线程 */
-async function streamIntoView(chapterId: number, question: string): Promise<void> {
+/** 把服务端检索到的资料片段渲染成回答上方的可折叠块（运行时 DOM，不写入线程） */
+function renderSources(answer: HTMLElement, items: SourceItem[]): void {
+  if (items.length === 0) return;
+  const details = el('details', 'assistant-sources');
+  details.appendChild(el('summary', '', `📚 检索资料（${items.length}）`));
+  for (const it of items) {
+    const row = el('div', 'assistant-source');
+    row.appendChild(
+      el('div', 'assistant-source-title', it.kind === 'bank' ? '素材库' : `章节《${it.title}》`),
+    );
+    row.appendChild(el('div', 'assistant-source-excerpt', it.excerpt));
+    details.appendChild(row);
+  }
+  answer.insertAdjacentElement('beforebegin', details);
+}
+
+/** 流式拉取 /api/ai/assistant（mode=ask，全书检索），把 token 追加进线程；完成后存回消息线程 */
+async function streamIntoView(novelId: number, question: string): Promise<void> {
   ctrl?.abort();
   const ac = new AbortController();
   ctrl = ac;
@@ -118,9 +144,11 @@ async function streamIntoView(chapterId: number, question: string): Promise<void
   status.id = 'assistant-status';
   thread?.appendChild(status);
 
+  const chapterId = activeChapterId();
   const body = {
-    chapterId,
+    novelId,
     mode: 'ask',
+    chapterId: chapterId ?? undefined,
     messages: messages.map((m) => ({ role: m.role, content: m.content })),
   };
 
@@ -142,8 +170,10 @@ async function streamIntoView(chapterId: number, question: string): Promise<void
       throw new Error(message);
     }
 
-    await consumeSSE(res.body, (evt) => {
-      if (evt.type === 'token' && evt.text) {
+    await consumeSSE(res.body, (evt: SSEEvent) => {
+      if (evt.type === 'sources' && evt.items && evt.items.length > 0) {
+        renderSources(answer, evt.items);
+      } else if (evt.type === 'token' && evt.text) {
         answer.textContent += evt.text;
       } else if (evt.type === 'error') {
         status.textContent = '✗ ' + (evt.message ?? '未知错误');
