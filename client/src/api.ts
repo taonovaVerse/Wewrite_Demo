@@ -104,6 +104,52 @@ export interface StyleProfile {
   taboo_words: string;
 }
 
+export interface SentenceMetrics {
+  count: number;
+  avgLen: number;
+  medianLen: number;
+  shortRatio: number;
+  longRatio: number;
+}
+
+export interface ParagraphMetrics {
+  count: number;
+  avgLen: number;
+  maxLen: number;
+}
+
+export interface DialogueMetrics {
+  ratio: number;
+  segmentCount: number;
+  avgSegLen: number;
+}
+
+export interface DescriptionMetrics {
+  cuePerThousand: number;
+}
+
+export interface VocabularyMetrics {
+  hanziTTR: number;
+  bigramTTR: number;
+  topTrigrams: string[];
+}
+
+export interface StyleMetrics {
+  chapterCount: number;
+  totalChars: number;
+  sentence: SentenceMetrics;
+  paragraph: ParagraphMetrics;
+  dialogue: DialogueMetrics;
+  description: DescriptionMetrics;
+  vocabulary: VocabularyMetrics;
+}
+
+export interface StyleAnalyzeResult {
+  metrics: StyleMetrics;
+  meta: { chaptersScanned: number; note?: string };
+  generated: { voice: string; rhythm_notes: string };
+}
+
 export interface CharacterInput {
   novelId: number;
   name: string;
@@ -173,6 +219,13 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.text();
+    try {
+      const data = JSON.parse(body) as { error?: string };
+      if (data.error) throw new Error(data.error);
+    } catch (err) {
+      if (err instanceof SyntaxError) throw new Error(`API ${res.status}: ${body}`);
+      throw err;
+    }
     throw new Error(`API ${res.status}: ${body}`);
   }
   if (res.status === 204) return undefined as T;
@@ -285,6 +338,8 @@ export const api = {
     request<StyleProfile>(`/api/style-profile?novelId=${novelId}`),
   saveStyleProfile: (data: { novelId: number; voice: string; rhythmNotes: string; tabooWords: string }) =>
     request<StyleProfile>('/api/style-profile', { method: 'PUT', body: JSON.stringify(data) }),
+  analyzeStyle: (novelId: number) =>
+    request<StyleAnalyzeResult>('/api/style/analyze', { method: 'POST', body: JSON.stringify({ novelId }) }),
 
   detailBank: {
     list: (novelId: number, q = '') =>
