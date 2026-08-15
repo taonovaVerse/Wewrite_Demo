@@ -294,7 +294,7 @@ function registerCommands(): void {
   registerCommand({ id: 'chapter.open', label: '打开章节…', category: '文件', run: quickOpenChapter });
   registerCommand({ id: 'tab.close', label: '关闭当前标签', category: '文件', run: closeActiveTab });
   registerCommand({ id: 'file.save', label: '保存', category: '文件', run: saveActive });
-  registerCommand({ id: 'ai.continue', label: '续写下一段', category: 'AI', run: () => void toggleContinue() });
+  registerCommand({ id: 'ai.continue', label: '续写一段', category: 'AI', run: () => void toggleContinue() });
   registerCommand({ id: 'ai.detail', label: '生成场景细节', category: 'AI', run: () => void triggerDetail() });
 
   const viewCmds: [ViewId, string][] = [

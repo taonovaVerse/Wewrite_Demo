@@ -15,6 +15,14 @@ function sse(res: Response, data: unknown): void {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
+/** 取【偏离预警】段之后的正文；无预警时返回全文。用于「一段即止」判定 */
+function paragraphBody(acc: string): string {
+  const wi = acc.indexOf('【偏离预警】');
+  if (wi === -1) return acc;
+  const ni = acc.indexOf('\n\n', wi);
+  return ni === -1 ? acc : acc.slice(ni + 2);
+}
+
 aiRouter.post('/autocomplete', async (req, res) => {
   const chapterId = Number(req.body?.chapterId);
   const textBefore = String(req.body?.textBefore ?? '');
@@ -112,6 +120,8 @@ aiRouter.post('/continue', (req, res) => {
           warned = true;
           sse(res, { type: 'warning', text: 'AI 提示可能偏离大纲，请审阅后修改' });
         }
+        // 一段即止：正文出现空行（段落分隔）即收尾，防止无限续写
+        if (paragraphBody(acc).replace(/^\s+/, '').includes('\n\n')) break;
       }
       sse(res, { type: 'done' });
     } catch (err) {

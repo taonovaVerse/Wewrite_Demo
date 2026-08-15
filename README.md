@@ -96,7 +96,7 @@ npm run build:desktop
 | 快捷键 | 功能 |
 |--------|------|
 | `Tab` | 接受幽灵补全（L1） |
-| `Ctrl+\` | 续写下一段（L3，流式） |
+| `Ctrl+\` | 续写一段（L3，流式） |
 | `Ctrl+Shift+\` | 生成场景细节（L2） |
 | `Esc` | 中断 AI 生成 |
 | `Ctrl+Shift+P` | 命令面板 |
